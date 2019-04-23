@@ -1,0 +1,26 @@
+[package]
+name = "minnie"
+version = "0.1.0"
+authors = ["Lymia Aluysia <lymia@lymiahugs.com>"]
+edition = "2018"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[dependencies]
+failure = "0.1.5"
+futures01 = { package = "futures", version = "0.1.21", features = ["nightly"] }
+futures-preview = { version = "0.3.0-alpha.14", features = ["compat", "io-compat", "nightly"] }
+log = "0.4.6"
+parking_lot = "0.7.1"
+reqwest = { version = "0.9.15", default-features = false, features = ["rustls-tls", "trust-dns"] }
+serde = "1.0.90"
+serde_derive = "1.0.90"
+static-events = { version = "0.2.0", git = "https://github.com/Lymia/static-events.git", rev = "224788b" }
+tokio = "0.1.18"
+trust-dns = { version = "0.16.0", features = ["dns-over-rustls", "dnssec-ring"] }
+websocket = { version = "0.22.3", default-features = false, features = ["async", "nightly"] }
+
+[dev-dependencies]
+simple_logger = "1.0.1"
