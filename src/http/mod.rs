@@ -8,7 +8,7 @@ mod limits;
 use self::limits::{GlobalLimit, RateLimit, RateLimitSet};
 
 #[derive(Default, Debug)]
-pub struct RateLimits {
+pub(crate) struct RateLimits {
     global_limit: GlobalLimit,
     get_gateway: RateLimit,
     get_gateway_bot: RateLimit,
@@ -22,6 +22,14 @@ impl DiscordContext {
     }
 }
 
+macro_rules! route {
+    ($base:literal) => {
+        concat!("https://discordapp.com/api/v6", $base)
+    };
+    ($base:literal $(, $val:expr)* $(,)?) => {
+        format!(concat!("https://discordapp.com/api/v6", $base), $($val)*).as_str()
+    };
+}
 macro_rules! routes {
     (<$lt:lifetime> $(
         route $name:ident($($param:ident: $param_ty:ty),* $(,)?) -> $ty:ty {
@@ -47,11 +55,11 @@ impl <'a> Routes<'a> {
     routes! { <'a>
         route get_gateway() -> GetGateway {
             rate_limit  : |l| &l.get_gateway,
-            make_request: |r| r.get("https://discordapp.com/api/v6/gateway")
+            make_request: |r| r.get(route!("/gateway"))
         }
         route get_gateway_bot() -> GetGatewayBot {
             rate_limit  : |l| &l.get_gateway_bot,
-            make_request: |r| r.get("https://discordapp.com/api/v6/gateway/bot")
+            make_request: |r| r.get(route!("/gateway/bot"))
         }
     }
 }

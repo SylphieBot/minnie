@@ -1,4 +1,5 @@
 use crate::errors::*;
+use crate::model::types::RateLimited;
 use futures::compat::*;
 use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
 use serde::de::DeserializeOwned;
@@ -175,12 +176,6 @@ fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
     }
 }
 
-#[derive(Deserialize, Debug)]
-struct RateLimited {
-    retry_after: u32,
-    global: bool,
-}
-
 enum ResponseStatus {
     Success(Option<RateLimitHeaders>, Response),
     RateLimited(Option<RateLimitHeaders>, Duration),
@@ -194,11 +189,10 @@ async fn check_response(request: RequestBuilder) -> Result<ResponseStatus> {
     } else if response.status() == StatusCode::TOO_MANY_REQUESTS {
         let rate_info = await!(response.json::<RateLimited>().compat())?;
         debug!("Encountered rate limit: {:?}", rate_info);
-        let retry_after = Duration::from_millis(rate_info.retry_after as u64);
         if rate_info.global {
-            Ok(ResponseStatus::GloballyRateLimited(retry_after))
+            Ok(ResponseStatus::GloballyRateLimited(rate_info.retry_after))
         } else {
-            Ok(ResponseStatus::RateLimited(parse_headers(&response)?, retry_after))
+            Ok(ResponseStatus::RateLimited(parse_headers(&response)?, rate_info.retry_after))
         }
     } else {
         unimplemented!()

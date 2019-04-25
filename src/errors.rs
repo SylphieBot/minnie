@@ -2,29 +2,36 @@ use failure::*;
 use reqwest::{Error as ReqwestError};
 use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
 use std::fmt;
+use std::io::{Error as IoError};
 use std::num::ParseIntError;
 use std::str::ParseBoolError;
+use websocket::result::WebSocketError;
 
-pub use std::result::{Result as StdResult};
+pub(crate) use std::result::{Result as StdResult};
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
+    #[fail(display = "Bot token is not valid: {}", _0)]
+    InvalidBotToken(&'static str),
+    #[fail(display = "Discord returned bad response: {}", _0)]
+    DiscordBadResponse(&'static str),
+    #[fail(display = "Internal error: {}", _0)]
+    InternalError(&'static str),
+
+    #[fail(display = "An IO error occurred: {}", _0)]
+    IoError(#[cause] IoError),
+    #[fail(display = "{}", _0)]
+    ParseBoolError(#[cause] std::str::ParseBoolError),
+    #[fail(display = "{}", _0)]
+    ParseIntError(#[cause] std::num::ParseIntError),
     #[fail(display = "Error making HTTP request: {}", _0)]
     ReqwestError(#[cause] ReqwestError),
     #[fail(display = "Could not convert value to HTTP header: {}", _0)]
     ReqwestHeaderError(#[cause] InvalidHeaderValue),
     #[fail(display = "Could not convert HTTP header to string: {}", _0)]
     ReqwestToStrError(#[cause] ReqwestToStrError),
-
-    #[fail(display = "{}", _0)]
-    ParseBoolError(#[cause] std::str::ParseBoolError),
-    #[fail(display = "{}", _0)]
-    ParseIntError(#[cause] std::num::ParseIntError),
-
-    #[fail(display = "Discord returned bad response: {}", _0)]
-    DiscordBadResponse(&'static str),
-    #[fail(display = "Internal error: {}", _0)]
-    InternalError(&'static str),
+    #[fail(display = "Websocket error: {}", _0)]
+    WebSocketError(#[cause] WebSocketError),
 }
 
 struct ErrorData {
@@ -105,16 +112,17 @@ macro_rules! generic_from {
     )*}
 }
 generic_from! {
+    IoError => IoError,
+    ParseBoolError => ParseBoolError,
+    ParseIntError => ParseIntError,
     ReqwestError => ReqwestError,
     ReqwestHeaderError => InvalidHeaderValue,
     ReqwestToStrError => ReqwestToStrError,
-
-    ParseBoolError => ParseBoolError,
-    ParseIntError => ParseIntError,
+    WebSocketError => WebSocketError,
 }
 
 // Helpers for error handling
-pub trait ErrorExt<T> {
+pub(crate) trait ErrorExt<T> {
     fn context(self, kind: ErrorKind) -> Result<T>;
 }
 impl <T> ErrorExt<T> for Option<T> {
@@ -147,5 +155,12 @@ macro_rules! error_kind {
 macro_rules! bail {
     ($($tt:tt)*) => {
         return Err(crate::errors::Error::new_with_backtrace(error_kind!($($tt)*)))
+    }
+}
+macro_rules! ensure {
+    ($check:expr, $($tt:tt)*) => {
+        if !$check {
+            bail!($($tt)*);
+        }
     }
 }
