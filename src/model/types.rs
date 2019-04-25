@@ -54,6 +54,22 @@ impl Debug for DiscordToken {
     }
 }
 
+/// An application ID.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
 pub struct ApplicationId(pub u64);
+
+/// A channel ID.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct ChannelId(pub u64);
+
+/// A guild ID.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct GuildId(pub u64);
+
+/// An user ID.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct UserId(pub u64);

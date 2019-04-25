@@ -4,7 +4,6 @@ use crate::model::types::DiscordToken;
 use reqwest::r#async::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::borrow::Cow;
-use std::fmt::{Formatter, Result as FmtResult};
 use std::sync::Arc;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::ClientConfig;

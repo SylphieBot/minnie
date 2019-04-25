@@ -1,6 +1,19 @@
 //! Structs relating to Discord events.
 
+use crate::errors::*;
+use crate::model::types::*;
 use serde_derive::*;
+use static_events::failable_event;
+
+/// A struct representing a `Voice State Update` event.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct VoiceStateUpdateEvent {
+    guild_id: GuildId,
+    channel_id: Option<ChannelId>,
+    self_mute: bool,
+    self_deaf: bool,
+}
+failable_event!(VoiceStateUpdateEvent, (), Error);
 
 /// An enum representing any gateway event.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -39,7 +52,7 @@ pub enum GatewayEvent {
     PresenceUpdate,
     TypingStart,
     UserUpdate,
-    VoiceStateUpdate,
+    VoiceStateUpdate(VoiceStateUpdateEvent),
     VoiceServerUpdate,
     WebhooksUpdate,
 }

@@ -3,7 +3,6 @@ use crate::model::types::RateLimited;
 use futures::compat::*;
 use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
 use serde::de::DeserializeOwned;
-use serde_derive::*;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::future::Future;
