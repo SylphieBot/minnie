@@ -36,7 +36,7 @@ impl DiscordContext {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DiscordContextBuilder {
     library_name: Option<String>,
     http_user_agent: Option<String>,

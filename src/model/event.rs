@@ -3,7 +3,7 @@
 use crate::errors::*;
 use crate::model::types::*;
 use serde_derive::*;
-use static_events::failable_event;
+use static_events::simple_event;
 
 /// A struct representing a `Voice State Update` event.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -13,17 +13,13 @@ pub struct VoiceStateUpdateEvent {
     self_mute: bool,
     self_deaf: bool,
 }
-failable_event!(VoiceStateUpdateEvent, (), Error);
+simple_event!(VoiceStateUpdateEvent);
 
 /// An enum representing any gateway event.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "t", content = "d")]
 pub enum GatewayEvent {
-    Hello,
-    Ready,
-    Resumed,
-    InvalidSession,
     ChannelCreate,
     ChannelUpdate,
     ChannelDelete,
@@ -55,4 +51,6 @@ pub enum GatewayEvent {
     VoiceStateUpdate(VoiceStateUpdateEvent),
     VoiceServerUpdate,
     WebhooksUpdate,
+    #[serde(other)]
+    UnknownEvent,
 }

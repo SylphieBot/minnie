@@ -9,6 +9,8 @@ pub mod context;
 pub mod gateway;
 pub mod http;
 pub mod model;
+pub mod shard;
+mod ws;
 
 pub mod prelude {
     pub use crate::context::{DiscordContext, DiscordContextBuilder};

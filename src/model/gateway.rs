@@ -25,6 +25,19 @@ pub struct GetGateway {
     pub url: String,
 }
 
+/// A struct representing a particular shard's ID.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct ShardId(pub u32, pub u32);
+impl ShardId {
+    pub fn handles_dms(&self) -> bool {
+        self.0 == 0
+    }
+    pub fn handles_guild(&self, guild: GuildId) -> bool {
+        let ShardId(id, count) = *self;
+        ((guild.0 >> 22) % count as u64) == id as u64
+    }
+}
+
 /// A struct representing the current limits on starting sessions.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SessionStartLimit {
@@ -48,7 +61,8 @@ pub struct GetGatewayBot {
 pub struct SessionId(pub String);
 
 /// Represents an activity type for user presence updates.
-#[derive(Serialize_repr, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
 pub enum ActivityType {
     Game = 0,
@@ -75,12 +89,12 @@ pub struct ActivityTimestamps {
 /// Represents the flags for a particular activity.
 #[derive(EnumSetType, Debug)]
 pub enum ActivityFlags {
-  Instance = 0,
-  Join = 1,
-  Spectate = 2,
-  JoinRequest = 3,
-  Sync = 4,
-  Play = 5,
+    Instance = 0,
+    Join = 1,
+    Spectate = 2,
+    JoinRequest = 3,
+    Sync = 4,
+    Play = 5,
 }
 
 /// Represents the party sizes available for an activity.
@@ -154,6 +168,8 @@ pub enum UserStatus {
     Idle,
     Invisible,
     Offline,
+    #[serde(other)]
+    Unknown,
 }
 
 /// The connection properties used for the `Identify` packet.
@@ -177,7 +193,7 @@ pub struct PacketIdentify {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub large_threshold: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shard: Option<(u32, u32)>,
+    pub shard: Option<ShardId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence: Option<PacketStatusUpdate>,
 }
@@ -234,6 +250,8 @@ pub enum GatewayOpcode {
     InvalidSession = 9,
     Hello = 10,
     HeartbeatAck = 11,
+    #[serde(other)]
+    Unknown = i32::max_value(),
 }
 
 /// The sequence number of an event received from a Discord gateway.
@@ -255,6 +273,7 @@ pub enum GatewayPacket {
     InvalidSession(bool),
     Hello(PacketHello),
     HeartbeatAck,
+    UnknownOpcode,
 }
 impl GatewayPacket {
     pub fn op(&self) -> GatewayOpcode {
@@ -270,6 +289,7 @@ impl GatewayPacket {
             GatewayPacket::InvalidSession(_) => GatewayOpcode::InvalidSession,
             GatewayPacket::Hello(_) => GatewayOpcode::Hello,
             GatewayPacket::HeartbeatAck => GatewayOpcode::HeartbeatAck,
+            GatewayPacket::UnknownOpcode => GatewayOpcode::Unknown,
         }
     }
 }
@@ -300,6 +320,7 @@ impl Serialize for GatewayPacket {
             GatewayPacket::InvalidSession(op) => ser.serialize_field("d", op)?,
             GatewayPacket::Hello(op) => ser.serialize_field("d", op)?,
             GatewayPacket::HeartbeatAck => ser.skip_field("d")?,
+            GatewayPacket::UnknownOpcode => ser.skip_field("d")?,
         }
         ser.end()
     }
@@ -447,6 +468,7 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                     GatewayOpcode::Hello =>
                         GatewayPacket::Hello(deserialize_as(delayed_d)?),
                     GatewayOpcode::HeartbeatAck => GatewayPacket::HeartbeatAck,
+                    GatewayOpcode::Unknown => GatewayPacket::UnknownOpcode,
                 }
             } else {
                 return Err(A::Error::missing_field("op"))
@@ -462,6 +484,7 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                     },
                     GatewayOpcode::Reconnect => GatewayPacket::Reconnect,
                     GatewayOpcode::HeartbeatAck => GatewayPacket::HeartbeatAck,
+                    GatewayOpcode::Unknown => GatewayPacket::UnknownOpcode,
                     _ => return Err(A::Error::missing_field("d")),
                 }
             } else {

@@ -1,13 +1,43 @@
 use failure::*;
+use flate2::DecompressError;
+use parking_lot::Mutex;
 use reqwest::{Error as ReqwestError};
 use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
+use serde_json::{Error as SerdeJsonError};
+use std::any::Any;
+use std::borrow::Cow;
 use std::fmt;
 use std::io::{Error as IoError};
 use std::num::ParseIntError;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::str::ParseBoolError;
-use websocket::result::WebSocketError;
+use websocket::{WebSocketError, CloseData};
 
 pub(crate) use std::result::{Result as StdResult};
+
+pub struct PanicWrapper(pub Mutex<Box<dyn Any + Send + 'static>>);
+impl PanicWrapper {
+    pub fn as_str(&self) -> String {
+        let lock = self.0.lock();
+        if let Some(s) = (*lock).downcast_ref::<&'static str>() {
+            (*s).into()
+        } else if let Some(s) = (*lock).downcast_ref::<String>() {
+            s.clone().into()
+        } else {
+            "<non-string panic info>".into()
+        }
+    }
+}
+impl fmt::Debug for PanicWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("PanicWrapper").field(&self.as_str()).finish()
+    }
+}
+impl fmt::Display for PanicWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.as_str())
+    }
+}
 
 #[derive(Fail, Debug)]
 pub enum ErrorKind {
@@ -17,7 +47,14 @@ pub enum ErrorKind {
     DiscordBadResponse(&'static str),
     #[fail(display = "Internal error: {}", _0)]
     InternalError(&'static str),
+    #[fail(display = "Panic occurred: {}", _0)]
+    Panicked(PanicWrapper),
 
+    #[fail(display = "Websocket disconnected: {:?}", _0)]
+    WebsocketDisconnected(Option<CloseData>),
+
+    #[fail(display = "Error decompressing a packet: {}", _0)]
+    DecompressError(#[cause] DecompressError),
     #[fail(display = "An IO error occurred: {}", _0)]
     IoError(#[cause] IoError),
     #[fail(display = "{}", _0)]
@@ -30,6 +67,8 @@ pub enum ErrorKind {
     ReqwestHeaderError(#[cause] InvalidHeaderValue),
     #[fail(display = "Could not convert HTTP header to string: {}", _0)]
     ReqwestToStrError(#[cause] ReqwestToStrError),
+    #[fail(display = "Error parsing JSON: {}", _0)]
+    SerdeJsonError(#[cause] SerdeJsonError),
     #[fail(display = "Websocket error: {}", _0)]
     WebSocketError(#[cause] WebSocketError),
 }
@@ -54,13 +93,24 @@ impl Error {
 
     #[inline(never)] #[cold]
     pub fn new_with_backtrace(kind: ErrorKind) -> Self {
-        Self::new(kind).with_backtrace()
+        Error::new(kind).with_backtrace()
     }
 
     #[inline(never)] #[cold]
     pub fn with_backtrace(mut self) -> Self {
         self.0.backtrace = Some(Backtrace::new());
         self
+    }
+
+    #[inline(never)] #[cold]
+    fn wrap_panic(panic: Box<dyn Any + Send + 'static>) -> Error {
+        Error::new(ErrorKind::Panicked(PanicWrapper(Mutex::new(panic))))
+    }
+    pub fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
+        match catch_unwind(AssertUnwindSafe(func)) {
+            Ok(r) => r,
+            Err(e) => Err(Error::wrap_panic(e)),
+        }
     }
 
     fn with_cause(mut self, cause: Box<dyn Fail>) -> Self {
@@ -112,12 +162,14 @@ macro_rules! generic_from {
     )*}
 }
 generic_from! {
+    DecompressError => DecompressError,
     IoError => IoError,
     ParseBoolError => ParseBoolError,
     ParseIntError => ParseIntError,
     ReqwestError => ReqwestError,
     ReqwestHeaderError => InvalidHeaderValue,
     ReqwestToStrError => ReqwestToStrError,
+    SerdeJsonError => SerdeJsonError,
     WebSocketError => WebSocketError,
 }
 
