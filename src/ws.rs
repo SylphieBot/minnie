@@ -5,7 +5,9 @@ use futures::prelude::*;
 use flate2::{Decompress, Status, FlushDecompress};
 use serde::*;
 use std::net::ToSocketAddrs;
+use std::time::{Instant, Duration};
 use tokio::net::TcpStream;
+use tokio::timer::timeout::{Timeout, Error as TimeoutError};
 use tokio_rustls::TlsStream;
 use tokio_rustls::rustls::ClientSession;
 use tokio_rustls::webpki::DNSNameRef;
@@ -32,10 +34,10 @@ async fn connect_ws_rustls(ctx: &DiscordContext, mut url: Url) -> Result<RustlsW
         .context(ErrorKind::DiscordBadResponse("Websocket URL has no hostname."))?;
     let dns_ref = DNSNameRef::try_from_ascii_str(host_str).ok()
         .context(ErrorKind::DiscordBadResponse("Websocket URL contains hostname."))?;
-    let tcp_conn = await!(TcpStream::connect(&socket).compat())?;
-    let tls_conn = await!(ctx.data.rustls_connector.connect(dns_ref, tcp_conn).compat())?;
+    let tcp_conn = TcpStream::connect(&socket).compat().await?;
+    let tls_conn = ctx.data.rustls_connector.connect(dns_ref, tcp_conn).compat().await?;
     let client_builder = ClientBuilder::from_url(&url);
-    let ws_conn = await!(client_builder.async_connect_on(tls_conn).compat())?;
+    let ws_conn = client_builder.async_connect_on(tls_conn).compat().await?;
 
     Ok(ws_conn.0)
 }
@@ -126,30 +128,47 @@ impl WebsocketConnection {
         ctx: &DiscordContext, url: Url, compressed: bool,
     ) -> Result<WebsocketConnection> {
         Ok(WebsocketConnection {
-            websocket: Compat01As03Sink::new(await!(connect_ws_rustls(ctx, url))?),
+            websocket: Compat01As03Sink::new(connect_ws_rustls(ctx, url).await?),
             decoder: StreamDecoder::new(compressed),
         })
     }
 
-    pub async fn send<'a>(&'a mut self, data: &'a impl Serialize) -> Result<()> {
-        await!(self.websocket.send(OwnedMessage::Text(serde_json::to_string(data)?)))?;
+    pub async fn send<'a>(&'a mut self, data: impl Serialize) -> Result<()> {
+        self.websocket.send(OwnedMessage::Text(serde_json::to_string(&data)?)).await?;
         Ok(())
     }
-    pub async fn receive<T: DeserializeOwned>(&mut self) -> Result<T> {
+    pub async fn receive<T>(
+        &mut self, parse: impl FnOnce(&[u8]) -> Result<T>, timeout: Duration,
+    ) -> Result<Option<T>> {
+        let timeout_end = Instant::now() + timeout;
         loop {
-            match await!(self.websocket.next()).transpose()? {
+            let remaining = match timeout_end.checked_duration_since(Instant::now()) {
+                Some(remaining) => remaining,
+                None => return Ok(None),
+            };
+
+            let fut = self.websocket.next().map(|x| x.transpose());
+            let result = Compat01As03::new(Timeout::new(Compat::new(fut), remaining)).await;
+            let data = match result {
+                Ok(v) => v,
+                Err(e) if e.is_inner() => return Err(e.into_inner().unwrap().into()),
+                Err(e) if e.is_elapsed() => return Ok(None),
+                Err(_) => bail!("Unknown `Timeout` error."),
+            };
+            match data {
                 Some(OwnedMessage::Binary(binary)) => {
-                    let packet = self.decoder.decode_packet(&binary)?;
-                    return Ok(serde_json::from_slice(packet)?)
+                    let packet =
+                        self.decoder.decode_packet(&binary).context(ErrorKind::PacketParseError)?;
+                    return Ok(Some(parse(packet).context(ErrorKind::PacketParseError)?))
                 }
                 Some(OwnedMessage::Text(text)) => {
                     if self.decoder.transport {
                         bail!(DiscordBadResponse, "Text received despite transport compression.");
                     }
-                    return Ok(serde_json::from_slice(text.as_bytes())?)
+                    return Ok(Some(parse(text.as_bytes()).context(ErrorKind::PacketParseError)?))
                 }
-                Some(msg @ OwnedMessage::Ping(_)) =>
-                    await!(self.websocket.send(msg))?,
+                Some(OwnedMessage::Ping(d)) =>
+                    self.websocket.send(OwnedMessage::Pong(d)).await?,
                 Some(OwnedMessage::Pong(_)) => { }
                 Some(OwnedMessage::Close(data)) =>
                     return Err(Error::new(ErrorKind::WebsocketDisconnected(data))),

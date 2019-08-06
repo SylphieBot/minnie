@@ -1,4 +1,5 @@
-#![feature(nll, existential_type, async_await, await_macro, non_exhaustive)]
+#![feature(nll, async_await, bind_by_move_pattern_guards, checked_duration_since)]
+#![deny(unused_must_use)]
 
 #[macro_use] extern crate derivative;
 #[macro_use] extern crate log;
@@ -9,7 +10,6 @@ pub mod context;
 pub mod gateway;
 pub mod http;
 pub mod model;
-pub mod shard;
 mod ws;
 
 pub mod prelude {

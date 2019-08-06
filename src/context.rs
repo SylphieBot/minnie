@@ -1,21 +1,30 @@
 use crate::errors::*;
 use crate::http::RateLimits;
+use crate::model::event::UserStatus;
+use crate::model::gateway::PacketStatusUpdate;
 use crate::model::types::DiscordToken;
+use parking_lot::RwLock;
 use reqwest::r#async::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::ClientConfig;
+use std::time::SystemTime;
+
+static CURRENT_CTX_ID: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct DiscordContextData {
+    pub context_id: usize,
     pub library_name: Cow<'static, str>,
     pub http_user_agent: Cow<'static, str>,
     pub client_token: DiscordToken,
     pub http_client: Client,
     pub rate_limits: RateLimits,
+    pub current_presence: RwLock<PacketStatusUpdate>,
     #[derivative(Debug="ignore")]
     pub rustls_connector: TlsConnector,
 }
@@ -33,6 +42,12 @@ impl DiscordContext {
     }
     pub fn builder(client_token: DiscordToken) -> DiscordContextBuilder {
         DiscordContextBuilder::new(client_token)
+    }
+
+    /// Returns an ID for this context. Guaranteed to be process unique, as long as no more than
+    /// `usize::max_value()` contexts are ever created.
+    pub fn id(&self) -> usize {
+        self.data.context_id
     }
 }
 
@@ -81,9 +96,18 @@ impl DiscordContextBuilder {
             .build()?;
 
         let data = Arc::new(DiscordContextData {
-            library_name, http_user_agent, client_token: self.client_token, http_client,
+            context_id: CURRENT_CTX_ID.fetch_add(0, Ordering::Relaxed),
+            library_name, http_user_agent,
+            client_token: self.client_token,
+            http_client,
             rate_limits: RateLimits::default(),
             rustls_connector: TlsConnector::from(Arc::new(ClientConfig::new())),
+            current_presence: RwLock::new(PacketStatusUpdate {
+                since: SystemTime::now(),
+                game: None,
+                status: UserStatus::Online,
+                afk: false,
+            }),
         });
         Ok(DiscordContext { data })
     }

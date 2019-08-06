@@ -1,5 +1,6 @@
 use failure::*;
 use flate2::DecompressError;
+use futures::FutureExt;
 use parking_lot::Mutex;
 use reqwest::{Error as ReqwestError};
 use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
@@ -7,6 +8,7 @@ use serde_json::{Error as SerdeJsonError};
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt;
+use std::future::Future;
 use std::io::{Error as IoError};
 use std::num::ParseIntError;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -47,34 +49,50 @@ pub enum ErrorKind {
     DiscordBadResponse(&'static str),
     #[fail(display = "Internal error: {}", _0)]
     InternalError(&'static str),
-    #[fail(display = "Panic occurred: {}", _0)]
+    #[fail(display = "{}", _0)]
     Panicked(PanicWrapper),
 
     #[fail(display = "Websocket disconnected: {:?}", _0)]
     WebsocketDisconnected(Option<CloseData>),
+    #[fail(display = "Failed to parse websocket packet.")]
+    PacketParseError,
 
-    #[fail(display = "Error decompressing a packet: {}", _0)]
+    // Wrappers for external error types.
+    #[fail(display = "Error decompressing a packet")]
     DecompressError(#[cause] DecompressError),
-    #[fail(display = "An IO error occurred: {}", _0)]
+    #[fail(display = "An IO error occurred")]
     IoError(#[cause] IoError),
-    #[fail(display = "{}", _0)]
-    ParseBoolError(#[cause] std::str::ParseBoolError),
-    #[fail(display = "{}", _0)]
-    ParseIntError(#[cause] std::num::ParseIntError),
-    #[fail(display = "Error making HTTP request: {}", _0)]
+    #[fail(display = "Error parsing boolean")]
+    ParseBoolError(std::str::ParseBoolError),
+    #[fail(display = "Error parsing integer: {}", _0)]
+    ParseIntError(std::num::ParseIntError),
+    #[fail(display = "Error making HTTP request")]
     ReqwestError(#[cause] ReqwestError),
-    #[fail(display = "Could not convert value to HTTP header: {}", _0)]
+    #[fail(display = "Could not convert value to HTTP header")]
     ReqwestHeaderError(#[cause] InvalidHeaderValue),
-    #[fail(display = "Could not convert HTTP header to string: {}", _0)]
+    #[fail(display = "Could not convert HTTP header to string")]
     ReqwestToStrError(#[cause] ReqwestToStrError),
-    #[fail(display = "Error parsing JSON: {}", _0)]
+    #[fail(display = "Error parsing JSON")]
     SerdeJsonError(#[cause] SerdeJsonError),
-    #[fail(display = "Websocket error: {}", _0)]
+    #[fail(display = "Websocket error")]
     WebSocketError(#[cause] WebSocketError),
 }
 
-struct ErrorData {
-    kind: ErrorKind, backtrace: Option<Backtrace>, cause: Option<Box<dyn Fail>>,
+pub struct ErrorData {
+    pub kind: ErrorKind,
+    pub backtrace: Option<Backtrace>,
+    pub cause: Option<Box<dyn Fail>>,
+}
+
+pub(crate) fn find_backtrace(fail: &impl Fail) -> Option<&Backtrace> {
+    let mut current: Option<&dyn Fail> = Some(fail);
+    while let Some(x) = current {
+        if let Some(bt) = x.backtrace() {
+            return Some(bt)
+        }
+        current = x.cause();
+    }
+    None
 }
 
 pub struct Error(Box<ErrorData>);
@@ -106,10 +124,20 @@ impl Error {
     fn wrap_panic(panic: Box<dyn Any + Send + 'static>) -> Error {
         Error::new(ErrorKind::Panicked(PanicWrapper(Mutex::new(panic))))
     }
+
+    /// Catches panics that occur in a closure, wrapping them in an [`Error`].
     pub fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
         match catch_unwind(AssertUnwindSafe(func)) {
             Ok(r) => r,
             Err(e) => Err(Error::wrap_panic(e)),
+        }
+    }
+
+    /// Catches panics that occur in a future, wrapping then in an [`Error`].
+    pub async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
+        match AssertUnwindSafe(fut).catch_unwind().await {
+            Ok(v) => v,
+            Err(panic) => Err(Error::wrap_panic(panic)),
         }
     }
 
@@ -118,8 +146,17 @@ impl Error {
         self
     }
 
+    pub fn into_inner(self) -> ErrorData {
+        *self.0
+    }
+
     pub fn error_kind(&self) -> &ErrorKind {
         &self.0.kind
+    }
+
+    /// Finds the first backtrace in the cause chain.
+    pub fn find_backtrace(&self) -> Option<&Backtrace> {
+        find_backtrace(self)
     }
 }
 impl Fail for Error {
@@ -139,12 +176,12 @@ impl Fail for Error {
     }
 }
 impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.0.kind, f)
     }
 }
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0.kind, f)
     }
 }

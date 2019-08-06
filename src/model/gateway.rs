@@ -1,9 +1,9 @@
-//! Structs related to gateway connections.
+//! Types related to gateway connections.
 
+use crate::errors::*;
 use crate::model::event::*;
 use crate::model::types::*;
 use crate::model::utils;
-use enumset::*;
 use serde::*;
 use serde::ser::{SerializeStruct, Error as SerError};
 use serde::de::{
@@ -17,28 +17,14 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::mem::replace;
 use std::time::{SystemTime, Duration};
-use crate::errors::StdResult;
 
-/// A struct representing the return value of the `Get Gateway` endpoint.
+/// The return value of the `Get Gateway` endpoint.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct GetGateway {
     pub url: String,
 }
 
-/// A struct representing a particular shard's ID.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ShardId(pub u32, pub u32);
-impl ShardId {
-    pub fn handles_dms(&self) -> bool {
-        self.0 == 0
-    }
-    pub fn handles_guild(&self, guild: GuildId) -> bool {
-        let ShardId(id, count) = *self;
-        ((guild.0 >> 22) % count as u64) == id as u64
-    }
-}
-
-/// A struct representing the current limits on starting sessions.
+/// The current limits on starting sessions.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct SessionStartLimit {
     pub total: u32,
@@ -47,129 +33,12 @@ pub struct SessionStartLimit {
     pub reset_after: Duration,
 }
 
-/// A struct representing the return value of the `Get Gateway Bot` endpoint.
+/// The return value of the `Get Gateway Bot` endpoint.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct GetGatewayBot {
     pub url: String,
     pub shards: u32,
     pub session_start_limit: SessionStartLimit,
-}
-
-/// Represents a session ID for resuming sessions.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[repr(transparent)]
-pub struct SessionId(pub String);
-
-/// Represents an activity type for user presence updates.
-#[derive(Serialize_repr, Deserialize_repr)]
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[repr(i32)]
-pub enum ActivityType {
-    Game = 0,
-    Streaming = 1,
-    Listening = 2,
-    #[serde(other)]
-    Unknown = i32::max_value(),
-}
-impl Default for ActivityType {
-    fn default() -> Self {
-        ActivityType::Game
-    }
-}
-
-/// Represents the time periods for which an activity has been going on.
-#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ActivityTimestamps {
-    #[serde(default, with = "utils::system_time_millis_opt")]
-    pub start: Option<SystemTime>,
-    #[serde(default, with = "utils::system_time_millis_opt")]
-    pub end: Option<SystemTime>,
-}
-
-/// Represents the flags for a particular activity.
-#[derive(EnumSetType, Debug)]
-pub enum ActivityFlags {
-    Instance = 0,
-    Join = 1,
-    Spectate = 2,
-    JoinRequest = 3,
-    Sync = 4,
-    Play = 5,
-}
-
-/// Represents the party sizes available for an activity.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ActivityParty {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub size: Option<(u32, u32)>,
-}
-
-/// Represents the assets used for available for an activity.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ActivityAssets {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub large_image: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub large_text: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub small_image: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub small_text: Option<String>,
-}
-
-/// Represents the secrets used for an activity.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct ActivitySecrets {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub join: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spectate: Option<String>,
-    #[serde(default, rename = "match", skip_serializing_if = "Option::is_none")]
-    pub match_: Option<String>,
-}
-
-/// Represents an activity for user presence updates.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct Activity {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub activity_type: ActivityType,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timestamps: Option<ActivityTimestamps>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub application_id: Option<ApplicationId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub details: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub party: Option<ActivityParty>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub assets: Option<ActivityAssets>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub secrets: Option<ActivitySecrets>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instance: Option<bool>,
-    #[serde(default, skip_serializing_if = "EnumSet::is_empty")]
-    pub flags: EnumSet<ActivityFlags>,
-}
-
-/// The connection status of an user.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[serde(rename = "lowercase")]
-pub enum UserStatus {
-    Online,
-    #[serde(rename = "dnd")]
-    DoNotDisturb,
-    Idle,
-    Invisible,
-    Offline,
-    #[serde(other)]
-    Unknown,
 }
 
 /// The connection properties used for the `Identify` packet.
@@ -184,57 +53,66 @@ pub struct ConnectionProperties {
 }
 
 /// The contents of the `Identify` packet.
+#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketIdentify {
     pub token: DiscordToken,
     pub properties: ConnectionProperties,
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub compress: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub large_threshold: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard: Option<ShardId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub presence: Option<PacketStatusUpdate>,
+    #[serde(default, skip_serializing_if = "utils::if_true")]
+    pub guild_subscriptions: bool,
 }
 
 /// The contents of the `Status Update` packet.
+#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketStatusUpdate {
     #[serde(with = "utils::system_time_millis")]
     pub since: SystemTime,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game: Option<Activity>,
     pub status: UserStatus,
     pub afk: bool,
 }
 
+/// The contents of the `Update Voice State` packet.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct PacketUpdateVoiceState {
+    pub guild_id: GuildId,
+    pub channel_id: Option<ChannelId>,
+    pub self_mute: bool,
+    pub self_deaf: bool,
+}
+
 /// The contents of the `Resume` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketResume {
-    token: DiscordToken,
-    session_id: SessionId,
-    seq: PacketSequenceID,
+    pub token: DiscordToken,
+    pub session_id: SessionId,
+    pub seq: PacketSequenceID,
 }
 
 /// The contents of the `Request Guild Members` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketRequestGuildMembers {
-    guild_id: GuildId,
-    query: String,
-    limit: u32,
+    pub guild_id: GuildId,
+    pub query: String,
+    pub limit: u32,
 }
 
 /// The contents of the `Hello` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketHello {
     #[serde(with = "utils::duration_millis")]
-    heartbeat_interval: Duration,
-    _trace: Option<String>,
+    pub heartbeat_interval: Duration,
 }
 
 
-/// The opcode for an gateway packet. This is mainly used internally and is not usable
+/// The opcode for an gateway packet. This is mainly used internally.
 #[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
@@ -250,8 +128,14 @@ pub enum GatewayOpcode {
     InvalidSession = 9,
     Hello = 10,
     HeartbeatAck = 11,
+
+    /// The opcode used for events that are ignored during deserialization.
+    ///
+    /// This does not actually exist in the Discord protocol, but exists so that [`GatewayPacket`]s
+    /// can be serialized and deserialized always.
+    IgnoredDispatch = 1230001,
     #[serde(other)]
-    Unknown = i32::max_value(),
+    Unknown = 1230002,
 }
 
 /// The sequence number of an event received from a Discord gateway.
@@ -259,30 +143,61 @@ pub enum GatewayOpcode {
 #[serde(transparent)]
 pub struct PacketSequenceID(pub u64);
 
-/// A struct representing a packet sent through the Discord gateway.
+/// The frame of a packet sent through the Discord gateway.
+///
+/// Used by the fallback for malformed `Presence Update` packets.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+struct GatewayPacketInvalidPresenceUpdate<'a> {
+    op: GatewayOpcode,
+    t: &'a str,
+    s: PacketSequenceID,
+    d: MalformedPresenceUpdateEvent,
+}
+
+/// A packet sent through the Discord gateway.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum GatewayPacket {
     Dispatch(PacketSequenceID, GatewayEvent),
-    Heartbeat(PacketSequenceID),
+    Heartbeat(Option<PacketSequenceID>),
     Identify(PacketIdentify),
     StatusUpdate(PacketStatusUpdate),
-    VoiceStatusUpdate(VoiceStateUpdateEvent),
+    UpdateVoiceState(PacketUpdateVoiceState),
     Resume(PacketResume),
     Reconnect,
     RequestGuildMembers(PacketRequestGuildMembers),
     InvalidSession(bool),
     Hello(PacketHello),
     HeartbeatAck,
+
+    // Synthetic packets that do not really exist in the Discord protocol.
+    IgnoredDispatch(PacketSequenceID),
     UnknownOpcode,
 }
 impl GatewayPacket {
+    pub fn from_json(s: &[u8]) -> Result<GatewayPacket> {
+        match serde_json::from_slice(s) {
+            Ok(v) => Ok(v),
+            Err(e) => match serde_json::from_slice::<GatewayPacketInvalidPresenceUpdate>(s) {
+                Ok(GatewayPacketInvalidPresenceUpdate { op, t, s, d })
+                    if op == GatewayOpcode::Dispatch && t == "PRESENCE_UPDATE"
+                => Ok(GatewayPacket::Dispatch(s, GatewayEvent::PresenceUpdate(
+                    PresenceUpdateEvent { user: d.id, malformed: true, ..Default::default() }
+                ))),
+                _ => Err(e.into())
+            }
+        }
+    }
+
+    /// Returns the opcode associated with this packet.
     pub fn op(&self) -> GatewayOpcode {
         match self {
-            GatewayPacket::Dispatch(_, _) => GatewayOpcode::Dispatch,
+            GatewayPacket::Dispatch(_, _) | GatewayPacket::IgnoredDispatch(_) =>
+                GatewayOpcode::Dispatch,
             GatewayPacket::Heartbeat(_) => GatewayOpcode::Heartbeat,
             GatewayPacket::Identify(_) => GatewayOpcode::Identify,
             GatewayPacket::StatusUpdate(_) => GatewayOpcode::StatusUpdate,
-            GatewayPacket::VoiceStatusUpdate(_) => GatewayOpcode::VoiceStatusUpdate,
+            GatewayPacket::UpdateVoiceState(_) => GatewayOpcode::VoiceStatusUpdate,
             GatewayPacket::Resume(_) => GatewayOpcode::Resume,
             GatewayPacket::Reconnect => GatewayOpcode::Reconnect,
             GatewayPacket::RequestGuildMembers(_) => GatewayOpcode::RequestGuildMembers,
@@ -290,6 +205,26 @@ impl GatewayPacket {
             GatewayPacket::Hello(_) => GatewayOpcode::Hello,
             GatewayPacket::HeartbeatAck => GatewayOpcode::HeartbeatAck,
             GatewayPacket::UnknownOpcode => GatewayOpcode::Unknown,
+        }
+    }
+
+    /// Whether this packet should be sent to the gateway
+    pub fn should_send(&self) -> bool {
+        match self.op() {
+            GatewayOpcode::Heartbeat | GatewayOpcode::Identify | GatewayOpcode::StatusUpdate |
+                GatewayOpcode::VoiceStatusUpdate | GatewayOpcode::Resume |
+                GatewayOpcode::RequestGuildMembers => true,
+            _ => false,
+        }
+    }
+
+    /// Whether this packet should be received from the gateway
+    pub fn should_receive(&self) -> bool {
+        match self.op() {
+            GatewayOpcode::Dispatch | GatewayOpcode::Heartbeat | GatewayOpcode::Reconnect |
+                GatewayOpcode::InvalidSession | GatewayOpcode::Hello |
+                GatewayOpcode::HeartbeatAck => true,
+            _ => false,
         }
     }
 }
@@ -310,10 +245,11 @@ impl Serialize for GatewayPacket {
         match self {
             GatewayPacket::Dispatch(_, ev) =>
                 return ev.serialize(utils::FlattenStruct::<S>(is_human_readable, ser)),
+            GatewayPacket::IgnoredDispatch(_) => ser.serialize_field("t", "__IGNORED")?,
             GatewayPacket::Heartbeat(_) => ser.skip_field("d")?,
             GatewayPacket::Identify(op) => ser.serialize_field("d", op)?,
             GatewayPacket::StatusUpdate(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::VoiceStatusUpdate(op) => ser.serialize_field("d", op)?,
+            GatewayPacket::UpdateVoiceState(op) => ser.serialize_field("d", op)?,
             GatewayPacket::Resume(op) => ser.serialize_field("d", op)?,
             GatewayPacket::Reconnect => ser.skip_field("d")?,
             GatewayPacket::RequestGuildMembers(op) => ser.serialize_field("d", op)?,
@@ -326,11 +262,15 @@ impl Serialize for GatewayPacket {
     }
 }
 impl <'de> Deserialize<'de> for GatewayPacket {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
         deserializer.deserialize_struct(
             "GatewayPacket", &["op", "s", "t", "d"], GatewayPacketVisitor,
         )
     }
+}
+
+fn or_missing<T, A: DeError>(o: Option<T>, name: &'static str) -> StdResult<T, A> {
+    o.ok_or_else(|| A::missing_field(name))
 }
 
 #[derive(Deserialize, Copy, Clone, Debug)]
@@ -353,9 +293,12 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
         formatter.write_str("gateway packet struct")
     }
 
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de>, {
+    fn visit_map<A>(
+        self, mut map: A,
+    ) -> StdResult<Self::Value, A::Error> where A: MapAccess<'de> {
         let mut op = None;
         let mut s = None;
+        let mut found_s = false;
         let mut t = None;
         let mut d = None;
         let mut delayed_d = None;
@@ -369,7 +312,13 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                 },
                 GatewayPacketField::S => match s {
                     Some(_) => return Err(A::Error::duplicate_field("s")),
-                    None => s = Some(map.next_value::<PacketSequenceID>()?),
+                    None => {
+                        if found_s {
+                            return Err(A::Error::duplicate_field("s"));
+                        }
+                        s = map.next_value::<Option<PacketSequenceID>>()?;
+                        found_s = true;
+                    },
                 },
                 GatewayPacketField::T => match t {
                     Some(_) => return Err(A::Error::duplicate_field("t")),
@@ -397,7 +346,7 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                             GatewayOpcode::StatusUpdate =>
                                 d = Some(GatewayPacket::StatusUpdate(map.next_value()?)),
                             GatewayOpcode::VoiceStatusUpdate =>
-                                d = Some(GatewayPacket::VoiceStatusUpdate(map.next_value()?)),
+                                d = Some(GatewayPacket::UpdateVoiceState(map.next_value()?)),
                             GatewayOpcode::Resume =>
                                 d = Some(GatewayPacket::Resume(map.next_value()?)),
                             GatewayOpcode::RequestGuildMembers =>
@@ -406,6 +355,8 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                                 d = Some(GatewayPacket::InvalidSession(map.next_value()?)),
                             GatewayOpcode::Hello =>
                                 d = Some(GatewayPacket::Hello(map.next_value()?)),
+                            GatewayOpcode::IgnoredDispatch =>
+                                d = Some(GatewayPacket::IgnoredDispatch(PacketSequenceID(!0))),
                             _ => {
                                 map.next_key::<IgnoredAny>()?;
                                 skipped_d = true;
@@ -422,12 +373,10 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
         Ok(if let Some(mut d) = d {
             // The happy path where t/op came before d.
             // The only thing we may have to set is s in Dispatch.
-            if let GatewayPacket::Dispatch(s_pos, _) = &mut d {
-                if let Some(s) = s {
-                    *s_pos = s;
-                } else {
-                    return Err(A::Error::missing_field("s"))
-                }
+            match &mut d {
+                GatewayPacket::Dispatch(s_pos, _) | GatewayPacket::IgnoredDispatch(s_pos) =>
+                    *s_pos = or_missing(s, "s")?,
+                _ => { }
             }
             d
         } else if let Some(delayed_d) = delayed_d {
@@ -435,53 +384,43 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
             //
             // It should never be reached because apparently the Android Discord client relies
             // on `d` coming last...
-            if let Some(op) = op {
-                match op {
-                    GatewayOpcode::Dispatch => if let Some(t) = t {
-                        if let Some(s) = s {
-                            let json = json!({ "t": t, "d": delayed_d });
-                            GatewayPacket::Dispatch(s, deserialize_as(json)?)
-                        } else {
-                            return Err(A::Error::missing_field("s"))
-                        }
-                    } else {
-                        return Err(A::Error::missing_field("t"))
-                    },
-                    GatewayOpcode::Heartbeat => if let Some(s) = s {
-                        GatewayPacket::Heartbeat(s)
-                    } else {
-                        return Err(A::Error::missing_field("s"))
-                    },
-                    GatewayOpcode::Identify =>
-                        GatewayPacket::Identify(deserialize_as(delayed_d)?),
-                    GatewayOpcode::StatusUpdate =>
-                        GatewayPacket::StatusUpdate(deserialize_as(delayed_d)?),
-                    GatewayOpcode::VoiceStatusUpdate =>
-                        GatewayPacket::VoiceStatusUpdate(deserialize_as(delayed_d)?),
-                    GatewayOpcode::Resume =>
-                        GatewayPacket::Resume(deserialize_as(delayed_d)?),
-                    GatewayOpcode::Reconnect => GatewayPacket::Reconnect,
-                    GatewayOpcode::RequestGuildMembers =>
-                        GatewayPacket::RequestGuildMembers(deserialize_as(delayed_d)?),
-                    GatewayOpcode::InvalidSession =>
-                        GatewayPacket::InvalidSession(deserialize_as(delayed_d)?),
-                    GatewayOpcode::Hello =>
-                        GatewayPacket::Hello(deserialize_as(delayed_d)?),
-                    GatewayOpcode::HeartbeatAck => GatewayPacket::HeartbeatAck,
-                    GatewayOpcode::Unknown => GatewayPacket::UnknownOpcode,
-                }
-            } else {
-                return Err(A::Error::missing_field("op"))
+            match or_missing(op, "op")? {
+                GatewayOpcode::Dispatch => {
+                    let s = or_missing(s, "s")?;
+                    let t = or_missing(t, "t")?;
+                    let json = json!({ "t": t, "d": delayed_d });
+                    GatewayPacket::Dispatch(s, deserialize_as(json)?)
+                },
+                GatewayOpcode::Heartbeat =>
+                    GatewayPacket::Heartbeat(s),
+                GatewayOpcode::Identify =>
+                    GatewayPacket::Identify(deserialize_as(delayed_d)?),
+                GatewayOpcode::StatusUpdate =>
+                    GatewayPacket::StatusUpdate(deserialize_as(delayed_d)?),
+                GatewayOpcode::VoiceStatusUpdate =>
+                    GatewayPacket::UpdateVoiceState(deserialize_as(delayed_d)?),
+                GatewayOpcode::Resume =>
+                    GatewayPacket::Resume(deserialize_as(delayed_d)?),
+                GatewayOpcode::Reconnect =>
+                    GatewayPacket::Reconnect,
+                GatewayOpcode::RequestGuildMembers =>
+                    GatewayPacket::RequestGuildMembers(deserialize_as(delayed_d)?),
+                GatewayOpcode::InvalidSession =>
+                    GatewayPacket::InvalidSession(deserialize_as(delayed_d)?),
+                GatewayOpcode::Hello =>
+                    GatewayPacket::Hello(deserialize_as(delayed_d)?),
+                GatewayOpcode::HeartbeatAck =>
+                    GatewayPacket::HeartbeatAck,
+                GatewayOpcode::IgnoredDispatch =>
+                    GatewayPacket::IgnoredDispatch(or_missing(s, "s")?),
+                GatewayOpcode::Unknown =>
+                    GatewayPacket::UnknownOpcode,
             }
         } else {
             // We got s before d, but we were going to ignore d anyway, or we didn't get d at all.
             if let Some(op) = op {
                 match op {
-                    GatewayOpcode::Heartbeat => if let Some(s) = s {
-                        GatewayPacket::Heartbeat(s)
-                    } else {
-                        return Err(A::Error::missing_field("s"))
-                    },
+                    GatewayOpcode::Heartbeat => GatewayPacket::Heartbeat(s),
                     GatewayOpcode::Reconnect => GatewayPacket::Reconnect,
                     GatewayOpcode::HeartbeatAck => GatewayPacket::HeartbeatAck,
                     GatewayOpcode::Unknown => GatewayPacket::UnknownOpcode,
@@ -504,7 +443,7 @@ impl <'a, 'de: 'a, A: MapAccess<'de>> MapAccess<'de> for DeserializeGatewayEvent
     type Error = A::Error;
     fn next_key_seed<K>(
         &mut self, seed: K,
-    ) -> Result<Option<K::Value>, A::Error> where K: DeserializeSeed<'de> {
+    ) -> StdResult<Option<K::Value>, A::Error> where K: DeserializeSeed<'de> {
         match self.2 {
             MapAccessPhase::T => Ok(Some(seed.deserialize("t".into_deserializer())?)),
             MapAccessPhase::D => Ok(Some(seed.deserialize("d".into_deserializer())?)),
@@ -513,7 +452,7 @@ impl <'a, 'de: 'a, A: MapAccess<'de>> MapAccess<'de> for DeserializeGatewayEvent
     }
     fn next_value_seed<V>(
         &mut self, seed: V,
-    ) -> Result<V::Value, A::Error> where V: DeserializeSeed<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: DeserializeSeed<'de> {
         match self.2 {
             MapAccessPhase::T => {
                 self.2 = MapAccessPhase::D;
@@ -529,102 +468,102 @@ impl <'a, 'de: 'a, A: MapAccess<'de>> MapAccess<'de> for DeserializeGatewayEvent
 }
 impl <'a, 'de: 'a, A: MapAccess<'de>> Deserializer<'de> for DeserializeGatewayEvent<'a, 'de, A> {
     type Error = A::Error;
-    fn deserialize_any<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_any<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_bool<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_bool<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_i8<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_i8<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_i16<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_i16<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_i32<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_i32<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_i64<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_i64<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_u8<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_u8<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_u16<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_u16<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_u32<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_u32<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_u64<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_u64<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_f32<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_f32<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_f64<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_f64<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_char<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_char<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_str<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_str<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_string<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_string<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_bytes<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_bytes<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_byte_buf<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_byte_buf<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_option<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_option<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_unit<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_unit<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
     fn deserialize_unit_struct<V>(self, _: &'static str, _: V,
-    ) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
     fn deserialize_newtype_struct<V>(
         self, _: &'static str, _: V,
-    ) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_seq<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_seq<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
     fn deserialize_tuple<V>(
         self, _: usize, _: V,
-    ) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
     fn deserialize_tuple_struct<V>(
         self, _: &'static str, _: usize, _: V,
-    ) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_map<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_map<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
     fn deserialize_struct<V>(
         self, _: &'static str, _: &'static [&'static str], visitor: V,
-    ) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         visitor.visit_map(self)
     }
     fn deserialize_enum<V>(
         self, _: &'static str, _: &'static [&'static str], _: V,
-    ) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_identifier<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_identifier<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
-    fn deserialize_ignored_any<V>(self, _: V) -> Result<V::Value, A::Error> where V: Visitor<'de> {
+    fn deserialize_ignored_any<V>(self, _: V) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         Err(A::Error::custom("internal error: must be struct"))
     }
 }

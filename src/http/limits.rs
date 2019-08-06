@@ -92,7 +92,7 @@ pub type GlobalLimit = Mutex<Option<Instant>>;
 
 async fn wait_until(time: Instant) {
     if time > Instant::now() {
-        await!(Delay::new(time).compat()).unwrap();
+        Delay::new(time).compat().await.unwrap();
     }
 }
 
@@ -109,7 +109,7 @@ async fn check_global_wait(global_limit: &GlobalLimit) -> bool {
 
     if let Some(time) = time {
         debug!("Waiting for preexisting global rate limit until {:?}", time);
-        await!(wait_until(time));
+        wait_until(time).await;
         true
     } else {
         false
@@ -121,7 +121,7 @@ fn check_route_wait(mut lock: MappedMutexGuard<RawRateLimit>) -> impl Future<Out
     async move {
         if let Some(time) = time {
             debug!("Waiting for preexisting route rate limit until {:?}", time);
-            await!(wait_until(time));
+            wait_until(time).await;
             true
         } else {
             false
@@ -181,12 +181,12 @@ enum ResponseStatus {
     GloballyRateLimited(Duration),
 }
 async fn check_response(request: RequestBuilder) -> Result<ResponseStatus> {
-    let mut response = await!(request.send().compat())?;
+    let mut response = request.send().compat().await?;
     if response.status().is_success() {
         let rate_info = parse_headers(&response)?;
         Ok(ResponseStatus::Success(rate_info, response))
     } else if response.status() == StatusCode::TOO_MANY_REQUESTS {
-        let rate_info = await!(response.json::<RateLimited>().compat())?;
+        let rate_info = response.json::<RateLimited>().compat().await?;
         debug!("Encountered rate limit: {:?}", rate_info);
         if rate_info.global {
             Ok(ResponseStatus::GloballyRateLimited(rate_info.retry_after))
@@ -217,23 +217,23 @@ async fn perform_rate_limited<'a, T: DeserializeOwned>(
 ) -> Result<T> {
     loop {
         loop {
-            if await!(check_global_wait(global_limit)) { continue }
-            if await!(check_route_wait(lock_raw_limit())) { continue }
+            if check_global_wait(global_limit).await { continue }
+            if check_route_wait(lock_raw_limit()).await { continue }
             break
         }
-        match await!(check_response(make_request()))? {
+        match check_response(make_request()).await? {
             ResponseStatus::Success(rate_limit, mut response) => {
                 push_rate_info(lock_raw_limit(), rate_limit);
-                return Ok(await!(response.json::<T>().compat())?)
+                return Ok(response.json::<T>().compat().await?)
             }
             ResponseStatus::RateLimited(rate_limit, wait_duration) => {
                 push_rate_info(lock_raw_limit(), rate_limit);
-                await!(wait_until(Instant::now() + wait_duration));
+                wait_until(Instant::now() + wait_duration).await;
             }
             ResponseStatus::GloballyRateLimited(wait_duration) => {
                 let time = Instant::now() + wait_duration;
                 push_global_rate_limit(global_limit, time);
-                await!(wait_until(time));
+                wait_until(time).await;
             }
         }
     }
