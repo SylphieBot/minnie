@@ -14,6 +14,6 @@ mod ws;
 
 pub mod prelude {
     pub use crate::context::{DiscordContext, DiscordContextBuilder};
-    pub use crate::errors::{Error, ErrorKind, Result};
+    pub use crate::errors::{Error, ErrorKind, Result as MinnieResult};
     pub use crate::http::Routes;
 }

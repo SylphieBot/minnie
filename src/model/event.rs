@@ -10,6 +10,7 @@ use enumset::*;
 use serde_derive::*;
 use serde_repr::*;
 use std::time::SystemTime;
+use strum_macros::*;
 
 /// An activity type for user presence updates.
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -179,7 +180,6 @@ pub struct ReadyEvent {
 /// An enum representing any gateway event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[serde(tag = "t", content = "d")]
 pub enum GatewayEvent {
     ChannelCreate(ChannelCreateEvent),
     ChannelUpdate(ChannelUpdateEvent),
@@ -208,6 +208,49 @@ pub enum GatewayEvent {
     MessageReactionRemoveAll,
     PresenceUpdate(PresenceUpdateEvent),
     Ready(ReadyEvent),
+    Resumed,
+    TypingStart,
+    UserUpdate,
+    VoiceStateUpdate,
+    VoiceServerUpdate,
+    WebhooksUpdate,
+    #[serde(other)]
+    UnknownEvent,
+}
+
+/// An enum representing the type of event that occurred.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(EnumString, Display, AsRefStr, IntoStaticStr)]
+#[strum(serialize_all = "shouty_snake_case")]
+pub enum GatewayEventType {
+    ChannelCreate,
+    ChannelUpdate,
+    ChannelDelete,
+    ChannelPinsUpdate,
+    GuildCreate,
+    GuildUpdate,
+    GuildDelete,
+    GuildBanAdd,
+    GuildBanRemove,
+    GuildEmojisUpdate,
+    GuildIntegrationsUpdate,
+    GuildMemberAdd,
+    GuildMemberRemove,
+    GuildMemberUpdate,
+    GuildMembersChunk,
+    GuildRoleCreate,
+    GuildRoleUpdate,
+    GuildRoleDelete,
+    MessageCreate,
+    MessageUpdate,
+    MessageDelete,
+    MessageDeleteBulk,
+    MessageReactionAdd,
+    MessageReactionRemove,
+    MessageReactionRemoveAll,
+    PresenceUpdate,
+    Ready,
     Resumed,
     TypingStart,
     UserUpdate,

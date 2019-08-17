@@ -4,22 +4,25 @@ use crate::model::event::*;
 use crate::model::gateway::*;
 use crate::model::types::*;
 use crate::ws::*;
+use crossbeam_channel::{self, Receiver, Sender};
 use failure::Fail;
 use futures::{pin_mut, poll};
 use futures::compat::*;
 use futures::prelude::*;
-use futures::task::Poll;
+use futures::task::{Poll, Spawn, SpawnExt};
 use std::fmt::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::*;
+use tokio::timer::Delay;
 use url::*;
 use websocket::CloseData;
+use tokio::sync::mpsc::error::UnboundedRecvError;
 
 // TODO: Implement rate limits.
-// TODO: Do we need to use async channels?
+// TODO: Is there a way we can avoid the timeout check in ws.rs?
 
+#[derive(Debug)]
 /// The type of error reported to an [`EventDispatch`].
 pub enum GatewayError<T: GatewayHandler> {
     /// The gateway failed to authenticate.
@@ -63,59 +66,13 @@ pub enum GatewayError<T: GatewayHandler> {
     EventHandlingPanicked(Error),
     /// An unknown opcode was encountered.
     UnknownOpcode,
-    /// The gateway panicked.
-    ///
-    /// Cannot be ignored.
+    /// The gateway panicked. This error forces a complete shutdown of the gateway.
     Panicked(Error),
 }
-
-/// How a gateway should respond to a specific error condition.
-pub enum GatewayResponse {
-    /// Disconnect from the gateway.
-    Shutdown,
-    /// Disconnect and then reconnect to the gateway. If the connection fails to be completely
-    /// established, a delay with exponential backoff will be introduced to the process.
-    Reconnect,
-    /// Attempt to ignore the error. This is not possible for all error statuses, and may cause
-    /// the gateway to reconnect instead.
-    Ignore,
-}
-
-fn report_fail(buf: &mut String, err: impl Fail) {
-    write!(buf, ": {}", err).unwrap();
-    let mut cause = err.cause();
-    while let Some(c) = cause {
-        write!(buf, "\nCaused by: {}", c).unwrap();
-        cause = err.cause();
-    }
-    if let Some(bt) = find_backtrace(&err) {
-        write!(buf, "\nBacktrace:\n{}", bt).unwrap();
-    }
-}
-
-/// Handles events dispatched to a gateway.
-///
-/// Although `minnie` is an asynchronous library, event dispatches are synchronous due to a
-/// mix of technical constraints (It is difficult to put async functions in traits) and practical
-/// considerations.
-///
-/// These functions block a shard's thread. Any complicated operations, including ones that would
-/// require waiting asynchronously for IO should be handled in a separate thread pool or spawned
-/// into the futures handler.
-pub trait GatewayHandler: Sized {
-    /// The type of error used by this handler.
-    type Error: Fail + Sized;
-
-    /// Handle events received by the gateway.
-    fn on_event(
-        &self, ctx: &DiscordContext, shard: ShardId, ev: GatewayEvent,
-    ) -> StdResult<(), Self::Error> {
-        Ok(())
-    }
-
+impl <T: GatewayHandler> GatewayError<T> {
     /// Returns a string representing the type of error that occurred.
-    fn error_str(&self, ctx: &DiscordContext, shard: ShardId, err: &GatewayError<Self>) -> String {
-        match err {
+    fn error_str(&self, shard: ShardId) -> String {
+        match self {
             GatewayError::HelloTimeout =>
                 format!("Shard #{} disconnected: Did not receieve Hello", shard),
             GatewayError::HeartbeatTimeout =>
@@ -143,12 +100,58 @@ pub trait GatewayHandler: Sized {
                 format!("Shard #{} panicked", shard),
         }
     }
+}
+
+#[derive(Copy, Clone, Debug)]
+/// How a gateway should respond to a specific error condition.
+pub enum GatewayResponse {
+    /// Disconnect from the gateway.
+    Shutdown,
+    /// Disconnect and then reconnect to the gateway. If the connection fails to be completely
+    /// established, a delay with exponential backoff will be introduced to the process.
+    Reconnect,
+    /// Attempt to ignore the error. This is not possible for all error statuses, and may cause
+    /// the gateway to reconnect instead.
+    Ignore,
+}
+
+fn report_fail(buf: &mut String, err: impl Fail) {
+    write!(buf, ": {}", err).unwrap();
+    let mut cause = err.cause();
+    while let Some(c) = cause {
+        write!(buf, "\nCaused by: {}", c).unwrap();
+        cause = c.cause();
+    }
+    if let Some(bt) = find_backtrace(&err) {
+        write!(buf, "\nBacktrace:\n{}", bt).unwrap();
+    }
+}
+
+/// Handles events dispatched to a gateway.
+///
+/// Although `minnie` is an asynchronous library, event dispatches are synchronous due to a
+/// mix of technical constraints (It is difficult to put async functions in traits) and practical
+/// considerations.
+///
+/// These functions block a shard's thread. Any complicated operations, including ones that would
+/// require waiting asynchronously for IO should be handled in a separate thread pool or spawned
+/// into the futures handler.
+pub trait GatewayHandler: Sized + Send + Sync + 'static {
+    /// The type of error used by this handler.
+    type Error: Fail + Sized;
+
+    /// Handle events received by the gateway.
+    fn on_event(
+        &self, ctx: &DiscordContext, shard: ShardId, ev: GatewayEvent,
+    ) -> StdResult<(), Self::Error> {
+        Ok(())
+    }
 
     /// Called when an error occurs in the gateway. This method should create an error report of
     /// some kind and then return.
     #[inline(never)]
     fn report_error(&self, ctx: &DiscordContext, shard: ShardId, err: GatewayError<Self>) {
-        let mut buf = self.error_str(ctx, shard, &err);
+        let mut buf = err.error_str(shard);
         match err {
             GatewayError::ConnectionError(err) |
             GatewayError::WebsocketError(err) |
@@ -158,7 +161,7 @@ pub trait GatewayHandler: Sized {
             GatewayError::Panicked(err) => report_fail(&mut buf, err),
             GatewayError::EventHandlingFailed(err) => report_fail(&mut buf, err),
             GatewayError::UnexpectedPacket(packet) => write!(buf, ": {:?}", packet).unwrap(),
-            GatewayError::RemoteHostDisconnected(Some(cd)) => write!(buf, "{:?}", cd).unwrap(),
+            GatewayError::RemoteHostDisconnected(Some(cd)) => write!(buf, ": {:?}", cd).unwrap(),
             GatewayError::AuthenticationFailure |
             GatewayError::UnknownOpcode |
             GatewayError::HelloTimeout |
@@ -182,8 +185,64 @@ pub trait GatewayHandler: Sized {
     }
 }
 
-struct GatewayState {
+/// The type of compression that shards are expected to use.
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+pub enum CompressionType {
+    /// Do not compress any packets.
+    NoCompression,
+    /// Compress large packets using gzip.
+    PacketCompression,
+    /// Use a shared gzip context across all packets.
+    TransportCompression,
+}
 
+/// Stores settings for a gateway.
+#[derive(Copy, Clone, Debug)]
+pub struct GatewaySettings {
+    /// The type of compression used.
+    pub compress: CompressionType,
+
+    /// How long the shard manager will wait before reconnecting a shard.
+    pub backoff_initial: Duration,
+    /// How much longer each shard will wait before reconnecting after a failed connection attempt.
+    pub backoff_factor: f64,
+    /// The maximum amount of time a shard will wait before attempting to connect again.
+    pub backoff_cap: Duration,
+    /// The maximum amount of time to randomly add between connection attempts.
+    pub backoff_variation: Option<Duration>,
+
+    /// Make struct non-exhaustive
+    _priv: ()
+}
+impl Default for GatewaySettings {
+    fn default() -> Self {
+        GatewaySettings {
+            compress: CompressionType::TransportCompression,
+            backoff_initial: Duration::from_secs(1),
+            backoff_factor: 2.0,
+            backoff_cap: Duration::from_secs(60),
+            backoff_variation: None,
+            _priv: ()
+        }
+    }
+}
+
+struct GatewayState {
+    gateway_url: Url,
+    config: GatewaySettings,
+}
+impl GatewayState {
+    fn url(&self) -> Url {
+        let mut url = self.gateway_url.clone();
+        let full_path = format!("v=6&encoding=json{}",
+                                if self.config.compress == CompressionType::TransportCompression {
+                                    "&compress=zlib-stream"
+                                } else {
+                                    ""
+                                });
+        url.set_query(Some(&full_path));
+        url
+    }
 }
 
 enum ShardSignal {
@@ -192,21 +251,10 @@ enum ShardSignal {
 }
 struct ShardState {
     id: ShardId,
-    gateway_url: Url,
-    compress: bool,
     shard_alive: AtomicBool,
     is_connected: AtomicBool,
-    connection: WebsocketConnection,
-}
-impl ShardState {
-    fn gateway_url(&self) -> Url {
-        let mut url = self.gateway_url.clone();
-        let full_path = format!("{}?v=6&encoding=json{}",
-                                url.path(),
-                                if self.compress { "&compression=zlib-stream" } else { "" });
-        url.set_path(&full_path);
-        url
-    }
+    send: Sender<ShardSignal>,
+    recv: Receiver<ShardSignal>,
 }
 
 enum ShardSession {
@@ -243,7 +291,7 @@ enum ShardPhase {
     /// The initial phase of shard connections, before the Hello packet is recieved.
     ///
     /// In this state, the shard manager code will allow up to 10 seconds for this packet to be
-    /// recieved before erroring.
+    /// received before erroring.
     Initial,
     /// The phase the shard enters when it is attempting to create a new session with an Identify
     /// packet.
@@ -253,15 +301,19 @@ enum ShardPhase {
     /// The phase the shard enters when the connection has been fully established.
     Connected,
 }
-async fn running_shard<'a>(
-    ctx: &'a DiscordContext,
-    state: &'a ShardState,
-    recv: UnboundedReceiver<ShardSignal>,
+
+/// A future running a single connection to a shard.
+async fn running_shard(
+    ctx: &DiscordContext,
+    gateway: &GatewayState,
+    state: &ShardState,
     session: &mut ShardSession,
     dispatch: &impl GatewayHandler,
 ) -> ShardStatus {
     use self::ShardPhase::*;
 
+    // Handle errors. `conn_successful` is used to signal the shard outer loop whether exponential
+    // backoff should be used or reset.
     let mut conn_successful = false;
     macro_rules! emit_err {
         (@ret_success) => {
@@ -275,6 +327,7 @@ async fn running_shard<'a>(
             let err = $error;
             let response = dispatch.on_error(ctx, state.id, &err);
             dispatch.report_error(ctx, state.id, err);
+            debug!("Error response: {:?}", response);
             match response {
                 GatewayResponse::Shutdown => return ShardStatus::Shutdown,
                 GatewayResponse::Ignore => $ignore_case,
@@ -286,8 +339,10 @@ async fn running_shard<'a>(
         ($error:expr, false $(,)?) => { emit_err!(@emit $error, emit_err!(@ret_success)); };
     }
 
-    let url = state.gateway_url();
-    let mut conn = match WebsocketConnection::connect_wss(ctx, url, state.compress).await {
+    // Connect to the gateway
+    let url = gateway.url();
+    let compress = gateway.config.compress == CompressionType::TransportCompression;
+    let mut conn = match WebsocketConnection::connect_wss(ctx, url, compress).await {
         Ok(v) => v,
         Err(e) => emit_err!(GatewayError::ConnectionError(e)),
     };
@@ -300,7 +355,7 @@ async fn running_shard<'a>(
         }}
     }
 
-    let mut recv = recv.compat().fuse();
+    // Start processing gateway events
     let mut conn_phase = Initial;
     let conn_start = Instant::now();
     let mut last_heartbeat = Instant::now();
@@ -331,6 +386,7 @@ async fn running_shard<'a>(
             Ok(Some(GatewayPacket::Dispatch(seq, data))) if conn_phase != Initial => {
                 conn_phase = Connected; // We assume we connected successfully if we got any event.
                 conn_successful = true;
+                state.is_connected.store(true, Ordering::Relaxed);
                 if let GatewayEvent::Ready(ev) = &data {
                     *session = ShardSession::Resume(ev.session_id.clone(), seq);
                 } else {
@@ -368,7 +424,7 @@ async fn running_shard<'a>(
                             browser: ctx.data.library_name.to_string(),
                             device: ctx.data.library_name.to_string()
                         },
-                        compress: true,
+                        compress: gateway.config.compress == CompressionType::PacketCompression,
                         large_threshold: Some(150),
                         shard: Some(state.id),
                         presence: Some(ctx.data.current_presence.read().clone()),
@@ -391,6 +447,22 @@ async fn running_shard<'a>(
             }
         }
 
+        // Check the signal channel.
+        let mut do_disconnect = false;
+        let mut do_presence_update = false;
+        while let Ok(sig) = state.recv.try_recv() {
+            match sig {
+                ShardSignal::SendPresenceUpdate => do_presence_update = true,
+                ShardSignal::Disconnect => do_disconnect = true,
+            }
+        }
+        if do_disconnect {
+            return ShardStatus::Shutdown
+        }
+        if do_presence_update {
+            send!(GatewayPacket::StatusUpdate(ctx.data.current_presence.read().clone()));
+        }
+
         // Check various timers.
         if conn_phase == Initial {
             // Check if too long has passed since the start of the connection.
@@ -408,31 +480,78 @@ async fn running_shard<'a>(
                 heartbeat_ack = false;
             }
         }
+    }
+}
 
-        // Check the signal channel.
-        loop {
-            let mut next = recv.next();
-            pin_mut!(next);
-            if let Poll::Ready(sig) = poll!(next) {
-                match sig.unwrap().expect("channel closed?") {
-                    ShardSignal::SendPresenceUpdate => {
-                        let status =
-                            GatewayPacket::StatusUpdate(ctx.data.current_presence.read().clone());
-                        send!(status);
-                    }
-                    ShardSignal::Disconnect => return ShardStatus::Shutdown,
+/// A future running a particular shard ID, particularly handling reconnection.
+async fn shard_main_loop(
+    ctx: &DiscordContext,
+    gateway: &GatewayState,
+    state: &ShardState,
+    dispatch: &impl GatewayHandler,
+) {
+    let mut reconnect_delay = gateway.config.backoff_initial;
+    let mut session = ShardSession::Inactive;
+    loop {
+        let result = running_shard(
+            &ctx, gateway, state, &mut session, dispatch,
+        ).await;
+        state.is_connected.store(false, Ordering::Relaxed);
+        match result {
+            ShardStatus::Shutdown => return,
+            ShardStatus::Reconnect => {
+                reconnect_delay = gateway.config.backoff_initial
+            },
+            ShardStatus::ReconnectWithBackoff => {
+                info!("Waiting {} seconds before reconnecting shard #{}...",
+                      reconnect_delay.as_millis() as f32 / 1000.0, state.id);
+                Delay::new(Instant::now() + reconnect_delay).compat().await.ok();
+                let f32_secs = reconnect_delay.as_secs_f64() * gateway.config.backoff_factor;
+                reconnect_delay = Duration::from_secs_f64(f32_secs);
+                if reconnect_delay > gateway.config.backoff_cap {
+                    reconnect_delay = gateway.config.backoff_cap;
                 }
-            } else {
-                break
             }
         }
     }
 }
-async fn shard_main_loop(ctx: DiscordContext, shard_state: Arc<ShardState>) -> Result<()> {
-    loop {
 
-    }
+/// Spawns a shard handler into a future executor.
+fn start_shard(
+    ctx: DiscordContext,
+    gateway: Arc<GatewayState>,
+    id: ShardId,
+    executor: &mut impl Spawn,
+    dispatch: Arc<impl GatewayHandler>,
+) -> Arc<ShardState> {
+    let (send, recv) = crossbeam_channel::unbounded();
+    let state = Arc::new(ShardState {
+        id, send, recv,
+        shard_alive: AtomicBool::new(true),
+        is_connected: AtomicBool::new(false),
+    });
+    let mut local_state = state.clone();
+    executor.spawn(async move {
+        if let Err(e) = Error::catch_panic_async(async {
+            shard_main_loop(&ctx, &gateway, &local_state, &*dispatch).await;
+            Ok(())
+        }).await {
+            dispatch.report_error(&ctx, id, GatewayError::Panicked(e));
+        }
+    }).expect("Could not spawn future into given executor.");
+    state
 }
-async fn start_shard(ctx: DiscordContext) -> Result<Arc<ShardState>> {
-    unimplemented!()
+
+pub async fn test_gateway(
+    ctx: DiscordContext,
+    id: ShardId,
+    executor: &mut impl Spawn,
+    dispatch: impl GatewayHandler,
+) {
+    let gateway_bot = ctx.routes().get_gateway_bot().await.unwrap();
+    let gateway = Arc::new(GatewayState {
+        gateway_url: Url::parse(&gateway_bot.url).unwrap(),
+        config: Default::default(),
+    });
+    start_shard(ctx, gateway, id, executor, Arc::new(dispatch));
 }

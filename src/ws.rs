@@ -20,6 +20,7 @@ use serde::de::DeserializeOwned;
 type RustlsWebsocket = Framed<TlsStream<TcpStream, ClientSession>, MessageCodec<OwnedMessage>>;
 async fn connect_ws_rustls(ctx: &DiscordContext, mut url: Url) -> Result<RustlsWebsocket> {
     ensure!(url.scheme() == "wss", DiscordBadResponse, "Discord requested non-secure websocket.");
+    debug!("Connecting to websocket at {}", url);
 
     if url.port().is_none() {
         url.set_port(Some(443)).unwrap();
@@ -28,7 +29,6 @@ async fn connect_ws_rustls(ctx: &DiscordContext, mut url: Url) -> Result<RustlsW
     let mut url_toks = url.to_socket_addrs()?;
     let socket = url_toks.next()
         .context(ErrorKind::DiscordBadResponse("Websocket URL has no hosts."))?;
-    ensure!(url_toks.next().is_none(), DiscordBadResponse, "Websocket URL has multiple hosts.");
 
     let host_str = url.host_str()
         .context(ErrorKind::DiscordBadResponse("Websocket URL has no hostname."))?;
@@ -72,7 +72,7 @@ struct StreamDecoder {
 impl StreamDecoder {
     fn new(uses_transport_compression: bool) -> StreamDecoder {
         StreamDecoder {
-            decoder: Decompress::new(false),
+            decoder: Decompress::new(true),
             buffer: allocate_buffer(BUFFER_MIN_SIZE),
             since_last_large: 0,
             transport: uses_transport_compression,
@@ -96,8 +96,8 @@ impl StreamDecoder {
         if self.buffer.len() > BUFFER_MIN_SIZE && (self.since_last_large > 10 || self.transport) {
             self.buffer = allocate_buffer(BUFFER_MIN_SIZE);
         }
-        if self.transport {
-            self.decoder.reset(false);
+        if !self.transport {
+            self.decoder.reset(true);
         }
 
         let (mut rest, mut total_decoded) =
@@ -125,15 +125,16 @@ pub struct WebsocketConnection {
 }
 impl WebsocketConnection {
     pub async fn connect_wss(
-        ctx: &DiscordContext, url: Url, compressed: bool,
+        ctx: &DiscordContext, url: Url, transport_compressed: bool,
     ) -> Result<WebsocketConnection> {
         Ok(WebsocketConnection {
             websocket: Compat01As03Sink::new(connect_ws_rustls(ctx, url).await?),
-            decoder: StreamDecoder::new(compressed),
+            decoder: StreamDecoder::new(transport_compressed),
         })
     }
 
-    pub async fn send<'a>(&'a mut self, data: impl Serialize) -> Result<()> {
+    pub async fn send(&mut self, data: impl Serialize) -> Result<()> {
+        info!("Send: {}", serde_json::to_string(&data)?);
         self.websocket.send(OwnedMessage::Text(serde_json::to_string(&data)?)).await?;
         Ok(())
     }
@@ -159,9 +160,11 @@ impl WebsocketConnection {
                 Some(OwnedMessage::Binary(binary)) => {
                     let packet =
                         self.decoder.decode_packet(&binary).context(ErrorKind::PacketParseError)?;
+                    info!("Recv: {}", ::std::str::from_utf8(packet).unwrap());
                     return Ok(Some(parse(packet).context(ErrorKind::PacketParseError)?))
                 }
                 Some(OwnedMessage::Text(text)) => {
+                    info!("Recv: {}", text);
                     if self.decoder.transport {
                         bail!(DiscordBadResponse, "Text received despite transport compression.");
                     }

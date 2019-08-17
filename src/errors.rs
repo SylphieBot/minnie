@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::future::Future;
 use std::io::{Error as IoError};
-use std::num::ParseIntError;
+use std::num::{ParseIntError, ParseFloatError};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::str::ParseBoolError;
 use websocket::{WebSocketError, CloseData};
@@ -58,24 +58,26 @@ pub enum ErrorKind {
     PacketParseError,
 
     // Wrappers for external error types.
-    #[fail(display = "Error decompressing a packet")]
-    DecompressError(#[cause] DecompressError),
-    #[fail(display = "An IO error occurred")]
-    IoError(#[cause] IoError),
+    #[fail(display = "Error decompressing a packet: {}", _0)]
+    DecompressError(DecompressError),
+    #[fail(display = "An IO error occurred: {}", _0)]
+    IoError(IoError),
     #[fail(display = "Error parsing boolean")]
-    ParseBoolError(std::str::ParseBoolError),
+    ParseBoolError(ParseBoolError),
     #[fail(display = "Error parsing integer: {}", _0)]
-    ParseIntError(std::num::ParseIntError),
-    #[fail(display = "Error making HTTP request")]
-    ReqwestError(#[cause] ReqwestError),
-    #[fail(display = "Could not convert value to HTTP header")]
-    ReqwestHeaderError(#[cause] InvalidHeaderValue),
-    #[fail(display = "Could not convert HTTP header to string")]
-    ReqwestToStrError(#[cause] ReqwestToStrError),
-    #[fail(display = "Error parsing JSON")]
-    SerdeJsonError(#[cause] SerdeJsonError),
-    #[fail(display = "Websocket error")]
-    WebSocketError(#[cause] WebSocketError),
+    ParseIntError(ParseIntError),
+    #[fail(display = "Error parsing float: {}", _0)]
+    ParseFloatError(ParseFloatError),
+    #[fail(display = "Error making HTTP request: {}", _0)]
+    ReqwestError(ReqwestError),
+    #[fail(display = "Could not convert value to HTTP header: {}", _0)]
+    ReqwestHeaderError(InvalidHeaderValue),
+    #[fail(display = "Could not convert HTTP header to string: {}", _0)]
+    ReqwestToStrError(ReqwestToStrError),
+    #[fail(display = "Error parsing JSON: {}", _0)]
+    SerdeJsonError(SerdeJsonError),
+    #[fail(display = "Websocket error: {}", _0)]
+    WebSocketError(WebSocketError),
 }
 
 pub struct ErrorData {
@@ -88,7 +90,10 @@ pub(crate) fn find_backtrace(fail: &impl Fail) -> Option<&Backtrace> {
     let mut current: Option<&dyn Fail> = Some(fail);
     while let Some(x) = current {
         if let Some(bt) = x.backtrace() {
-            return Some(bt)
+            let s = bt.to_string();
+            if !s.trim().is_empty() {
+                return Some(bt)
+            }
         }
         current = x.cause();
     }
@@ -203,6 +208,7 @@ generic_from! {
     IoError => IoError,
     ParseBoolError => ParseBoolError,
     ParseIntError => ParseIntError,
+    ParseFloatError => ParseFloatError,
     ReqwestError => ReqwestError,
     ReqwestHeaderError => InvalidHeaderValue,
     ReqwestToStrError => ReqwestToStrError,

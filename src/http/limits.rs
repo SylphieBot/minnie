@@ -16,15 +16,7 @@ use tokio::timer::Delay;
 
 // TODO: Add support for garbage collecting old channels and guilds.
 // TODO: Add error contexts.
-
-const SECOND: Duration = Duration::from_secs(1);
-fn time_diff(resets_at: SystemTime) -> Duration {
-    let now = SystemTime::now();
-    match resets_at.duration_since(now) {
-        Ok(diff) => max(diff, SECOND),
-        Err(_) => SECOND,
-    }
-}
+// TODO: Do something with X-RateLimit-Bucket
 
 /// Stores information about a particular rate limit.
 #[derive(Debug)]
@@ -72,12 +64,12 @@ impl RawRateLimit {
             },
         };
         if replace {
-            let time_diff = time_diff(info.resets_at);
-            let resets_at = Instant::now() + time_diff;
             *self = RawRateLimit::Known {
-                limit: info.limit, remaining: info.remaining, resets_at,
+                limit: info.limit,
+                remaining: info.remaining,
+                resets_at: info.resets_at_instant,
                 first_encountered_reset_period: info.resets_at,
-                estimated_reset_period: time_diff
+                estimated_reset_period: info.resets_in,
             }
         }
     }
@@ -130,7 +122,8 @@ fn check_route_wait(mut lock: MappedMutexGuard<RawRateLimit>) -> impl Future<Out
 }
 
 struct RateLimitHeaders {
-    limit: u32, remaining: u32, resets_at: SystemTime,
+    limit: u32, remaining: u32,
+    resets_at: SystemTime, resets_at_instant: Instant, resets_in: Duration,
 }
 fn parse_header<T: FromStr>(
     headers: &HeaderMap, name: &'static str,
@@ -148,13 +141,17 @@ fn parse_header<T: FromStr>(
 }
 fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
     let headers = response.headers();
+    let now = Instant::now();
 
-    let global    = parse_header::<bool>(headers, "X-RateLimit-Global")?.unwrap_or(false);
-    let limit     = parse_header::<u32>(headers, "X-RateLimit-Limit")?;
-    let remaining = parse_header::<u32>(headers, "X-RateLimit-Remaining")?;
-    let reset     = parse_header::<u64>(headers, "X-RateLimit-Reset")?;
-    let any_limit = limit.is_some() || remaining.is_some() || reset.is_some();
-    let all_limit = limit.is_some() && remaining.is_some() && reset.is_some();
+    let global      = parse_header::<bool>(headers, "X-RateLimit-Global")?.unwrap_or(false);
+    let limit       = parse_header::<u32>(headers, "X-RateLimit-Limit")?;
+    let remaining   = parse_header::<u32>(headers, "X-RateLimit-Remaining")?;
+    let reset       = parse_header::<f64>(headers, "X-RateLimit-Reset")?;
+    let reset_after = parse_header::<f64>(headers, "X-RateLimit-Reset-After")?;
+    let any_limit   = limit.is_some() || remaining.is_some() || reset.is_some() ||
+                      reset_after.is_some();
+    let all_limit   = limit.is_some() && remaining.is_some() && reset.is_some() &&
+                      reset_after.is_some();
 
     if global {
         if any_limit {
@@ -165,10 +162,13 @@ fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
         if !all_limit {
             bail!(DiscordBadResponse, "Incomplete rate limit headers returned.");
         }
+        let resets_in = Duration::from_secs_f64(reset_after.unwrap());
         Ok(Some(RateLimitHeaders {
             limit: limit.unwrap(),
             remaining: remaining.unwrap(),
-            resets_at: UNIX_EPOCH + Duration::from_secs(reset.unwrap()),
+            resets_at: UNIX_EPOCH + Duration::from_secs_f64(reset.unwrap()),
+            resets_at_instant: now + resets_in,
+            resets_in,
         }))
     } else {
         Ok(None)
@@ -181,6 +181,7 @@ enum ResponseStatus {
     GloballyRateLimited(Duration),
 }
 async fn check_response(request: RequestBuilder) -> Result<ResponseStatus> {
+    let request = request.header("X-RateLimit-Precision", "millisecond");
     let mut response = request.send().compat().await?;
     if response.status().is_success() {
         let rate_info = parse_headers(&response)?;
@@ -211,9 +212,9 @@ fn push_global_rate_limit(global_limit: &GlobalLimit, target: Instant) {
 }
 
 async fn perform_rate_limited<'a, T: DeserializeOwned>(
-    global_limit: &'a GlobalLimit,
+    global_limit: &GlobalLimit,
     lock_raw_limit: impl Fn() -> MappedMutexGuard<'a, RawRateLimit> + 'a,
-    make_request: impl Fn() -> RequestBuilder + 'a,
+    make_request: impl Fn() -> RequestBuilder,
 ) -> Result<T> {
     loop {
         loop {

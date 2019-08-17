@@ -95,13 +95,16 @@ impl DiscordContextBuilder {
             .referer(false)
             .build()?;
 
+        let mut rustls_config = ClientConfig::new();
+        rustls_config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+
         let data = Arc::new(DiscordContextData {
             context_id: CURRENT_CTX_ID.fetch_add(0, Ordering::Relaxed),
             library_name, http_user_agent,
             client_token: self.client_token,
             http_client,
             rate_limits: RateLimits::default(),
-            rustls_connector: TlsConnector::from(Arc::new(ClientConfig::new())),
+            rustls_connector: TlsConnector::from(Arc::new(rustls_config)),
             current_presence: RwLock::new(PacketStatusUpdate {
                 since: SystemTime::now(),
                 game: None,
