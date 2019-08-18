@@ -21,6 +21,8 @@ use tokio::sync::mpsc::error::UnboundedRecvError;
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
+// TODO: Allow setting guild_subscriptions.
+// TODO: Do not resume after certain kinds of errors. (ones that are likely to recur if we do)
 
 #[derive(Debug)]
 /// The type of error reported to an [`EventDispatch`].
@@ -451,7 +453,7 @@ async fn running_shard(
                         large_threshold: Some(150),
                         shard: Some(state.id),
                         presence: Some(ctx.data.current_presence.read().clone()),
-                        guild_subscriptions: false
+                        guild_subscriptions: true,
                     });
                     send!(pkt);
                     conn_phase = Authenticating;

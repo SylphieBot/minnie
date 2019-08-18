@@ -85,35 +85,37 @@ impl StreamDecoder {
         let last_total_out = decoder.total_out();
         let result = decoder.decompress(buf, raw_buffer, FlushDecompress::Sync)?;
         let output_written = (decoder.total_out() - last_total_out) as usize;
-        match result {
-            Status::StreamEnd | Status::Ok =>
-                Ok((&[], output_written)),
-            Status::BufError =>
-                Ok((&buf[(decoder.total_in() - last_total_out) as usize..], output_written)),
-        }
+        Ok((&buf[(decoder.total_in() - last_total_in) as usize..], output_written))
     }
     fn decode_packet<'a>(&'a mut self, data: &'a [u8]) -> Result<&'a [u8]> {
-        if self.buffer.len() > BUFFER_MIN_SIZE && (self.since_last_large > 10 || self.transport) {
+        if self.buffer.len() > BUFFER_MIN_SIZE && (self.since_last_large > 10 || !self.transport) {
             self.buffer = allocate_buffer(BUFFER_MIN_SIZE);
         }
         if !self.transport {
             self.decoder.reset(true);
         }
 
-        let (mut rest, mut total_decoded) =
-            Self::decode_step(&mut self.decoder, data, &mut self.buffer)?;
-        while !rest.is_empty() {
-            let current_len = self.buffer.len();
-            extend_buffer(&mut self.buffer, current_len);
+        let mut rest = data;
+        let mut total_decoded = 0;
+        loop {
+            if total_decoded == self.buffer.len() {
+                let current_len = self.buffer.len();
+                extend_buffer(&mut self.buffer, current_len);
+            }
+
             let (new_rest, decoded) =
                 Self::decode_step(&mut self.decoder, rest, &mut self.buffer[total_decoded..])?;
             rest = new_rest;
             total_decoded += decoded;
+
+            if rest.is_empty() && total_decoded != self.buffer.len() {
+                break
+            }
         }
         if total_decoded > BUFFER_MIN_SIZE {
-            self.since_last_large += 1;
-        } else {
             self.since_last_large = 0;
+        } else {
+            self.since_last_large += 1;
         }
         Ok(&self.buffer[0..total_decoded])
     }
