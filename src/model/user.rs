@@ -6,7 +6,7 @@ use serde_repr::*;
 
 /// A struct representing a partial Discord user. Returned by most events involving users.
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct PartialUser {
+pub struct User {
     pub id: UserId,
     pub username: String,
     pub discriminator: String,
@@ -18,7 +18,7 @@ pub struct PartialUser {
 /// A struct representing a full Discord user. Returned only by the `/users/@me` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct User {
+pub struct FullUser {
     pub id: UserId,
     pub username: String,
     pub discriminator: String,
@@ -36,9 +36,9 @@ pub struct User {
     pub premium_type: Option<UserPremiumType>,
 }
 
-impl From<User> for PartialUser {
-    fn from(user: User) -> Self {
-        PartialUser {
+impl From<FullUser> for User {
+    fn from(user: FullUser) -> Self {
+        User {
             id: user.id,
             username: user.username,
             discriminator: user.discriminator,
@@ -60,6 +60,7 @@ pub enum UserFlags {
     HouseBrilliance = 7,
     HouseBalance = 8,
     EarlySupporter = 9,
+    TeamUser = 10,
 }
 
 /// The kind of Nitro subscription a user has.

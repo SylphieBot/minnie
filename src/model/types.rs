@@ -100,6 +100,11 @@ pub struct RoleId(#[serde(with = "utils::id_str")] pub u64);
 #[serde(transparent)]
 pub struct UserId(#[serde(with = "utils::id_str")] pub u64);
 
+/// A webhook ID.
+#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct WebhookId(#[serde(with = "utils::id_str")] pub u64);
+
 /// Identifies a shard.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ShardId(pub u32, pub u32);

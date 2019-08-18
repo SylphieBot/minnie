@@ -79,7 +79,6 @@ pub struct PacketStatusUpdate {
 }
 
 /// The contents of the `Update Voice State` packet.
-#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketUpdateVoiceState {
     pub guild_id: GuildId,
@@ -113,29 +112,54 @@ pub struct PacketHello {
 
 
 /// The opcode for an gateway packet. This is mainly used internally.
-#[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[repr(i32)]
 pub enum GatewayOpcode {
-    Dispatch = 0,
-    Heartbeat = 1,
-    Identify = 2,
-    StatusUpdate = 3,
-    VoiceStatusUpdate = 4,
-    Resume = 6,
-    Reconnect = 7,
-    RequestGuildMembers = 8,
-    InvalidSession = 9,
-    Hello = 10,
-    HeartbeatAck = 11,
-
-    /// The opcode used for events that are ignored during deserialization.
-    ///
-    /// This does not actually exist in the Discord protocol, but exists so that [`GatewayPacket`]s
-    /// can be serialized and deserialized always.
-    IgnoredDispatch = 1230001,
-    #[serde(other)]
-    Unknown = 1230002,
+    Dispatch,
+    Heartbeat,
+    Identify,
+    StatusUpdate,
+    VoiceStatusUpdate,
+    Resume,
+    Reconnect,
+    RequestGuildMembers,
+    InvalidSession,
+    Hello,
+    HeartbeatAck,
+    Unknown(i128),
+}
+impl GatewayOpcode {
+    pub fn from_i128(val: i128) -> GatewayOpcode {
+        match val {
+            0 => GatewayOpcode::Dispatch,
+            1 => GatewayOpcode::Heartbeat,
+            2 => GatewayOpcode::Identify,
+            3 => GatewayOpcode::StatusUpdate,
+            4 => GatewayOpcode::VoiceStatusUpdate,
+            6 => GatewayOpcode::Resume,
+            7 => GatewayOpcode::Reconnect,
+            8 => GatewayOpcode::RequestGuildMembers,
+            9 => GatewayOpcode::InvalidSession,
+            10 => GatewayOpcode::Hello,
+            11 => GatewayOpcode::HeartbeatAck,
+            _ => GatewayOpcode::Unknown(val),
+        }
+    }
+    pub fn to_i128(&self) -> i128 {
+        match self {
+            GatewayOpcode::Dispatch => 0,
+            GatewayOpcode::Heartbeat => 1,
+            GatewayOpcode::Identify => 2,
+            GatewayOpcode::StatusUpdate => 3,
+            GatewayOpcode::VoiceStatusUpdate => 4,
+            GatewayOpcode::Resume => 6,
+            GatewayOpcode::Reconnect => 7,
+            GatewayOpcode::RequestGuildMembers => 8,
+            GatewayOpcode::InvalidSession => 9,
+            GatewayOpcode::Hello => 10,
+            GatewayOpcode::HeartbeatAck => 11,
+            GatewayOpcode::Unknown(val)=> *val,
+        }
+    }
 }
 
 /// The sequence number of an event received from a Discord gateway.
@@ -149,7 +173,7 @@ pub struct PacketSequenceID(pub u64);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 struct GatewayPacketInvalidPresenceUpdate<'a> {
-    op: GatewayOpcode,
+    op: i128,
     t: &'a str,
     s: PacketSequenceID,
     d: MalformedPresenceUpdateEvent,
@@ -158,7 +182,7 @@ struct GatewayPacketInvalidPresenceUpdate<'a> {
 /// A packet sent through the Discord gateway.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum GatewayPacket {
-    Dispatch(PacketSequenceID, GatewayEvent),
+    Dispatch(PacketSequenceID, GatewayEventType, Option<GatewayEvent>),
     Heartbeat(Option<PacketSequenceID>),
     Identify(PacketIdentify),
     StatusUpdate(PacketStatusUpdate),
@@ -169,21 +193,25 @@ pub enum GatewayPacket {
     InvalidSession(bool),
     Hello(PacketHello),
     HeartbeatAck,
-
-    // Synthetic packets that do not really exist in the Discord protocol.
-    IgnoredDispatch(PacketSequenceID),
-    UnknownOpcode,
+    UnknownOpcode(i128),
 }
 impl GatewayPacket {
-    pub fn from_json(s: &[u8]) -> Result<GatewayPacket> {
-        match serde_json::from_slice(s) {
+    pub fn from_json(
+        s: &[u8], is_ignored: impl Fn(&GatewayEventType) -> bool,
+    ) -> Result<GatewayPacket> {
+        let seed = GatewayPacketSeed { is_ignored };
+        match seed.deserialize(&mut serde_json::Deserializer::from_slice(s)) {
             Ok(v) => Ok(v),
             Err(e) => match serde_json::from_slice::<GatewayPacketInvalidPresenceUpdate>(s) {
                 Ok(GatewayPacketInvalidPresenceUpdate { op, t, s, d })
-                    if op == GatewayOpcode::Dispatch && t == "PRESENCE_UPDATE"
-                => Ok(GatewayPacket::Dispatch(s, GatewayEvent::PresenceUpdate(
-                    PresenceUpdateEvent { user: d.id, malformed: true, ..Default::default() }
-                ))),
+                    if GatewayOpcode::from_i128(op) == GatewayOpcode::Dispatch &&
+                        t == "PRESENCE_UPDATE"
+                => {
+                    let ev = GatewayEvent::PresenceUpdate(
+                        PresenceUpdateEvent { user: d.id, malformed: true, ..Default::default() },
+                    );
+                    Ok(GatewayPacket::Dispatch(s, GatewayEventType::PresenceUpdate, Some(ev)))
+                },
                 _ => Err(e.into())
             }
         }
@@ -192,8 +220,7 @@ impl GatewayPacket {
     /// Returns the opcode associated with this packet.
     pub fn op(&self) -> GatewayOpcode {
         match self {
-            GatewayPacket::Dispatch(_, _) | GatewayPacket::IgnoredDispatch(_) =>
-                GatewayOpcode::Dispatch,
+            GatewayPacket::Dispatch(..) => GatewayOpcode::Dispatch,
             GatewayPacket::Heartbeat(_) => GatewayOpcode::Heartbeat,
             GatewayPacket::Identify(_) => GatewayOpcode::Identify,
             GatewayPacket::StatusUpdate(_) => GatewayOpcode::StatusUpdate,
@@ -204,7 +231,7 @@ impl GatewayPacket {
             GatewayPacket::InvalidSession(_) => GatewayOpcode::InvalidSession,
             GatewayPacket::Hello(_) => GatewayOpcode::Hello,
             GatewayPacket::HeartbeatAck => GatewayOpcode::HeartbeatAck,
-            GatewayPacket::UnknownOpcode => GatewayOpcode::Unknown,
+            GatewayPacket::UnknownOpcode(op) => GatewayOpcode::Unknown(*op),
         }
     }
 
@@ -232,20 +259,23 @@ impl Serialize for GatewayPacket {
     fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
         let is_human_readable = serializer.is_human_readable();
         let mut ser = serializer.serialize_struct("GatewayPacket", 4)?;
-        ser.serialize_field("op", &self.op())?;
+        ser.serialize_field("op", &self.op().to_i128())?;
         match self {
-            GatewayPacket::Dispatch(seq, _) => ser.serialize_field("s", seq)?,
+            GatewayPacket::Dispatch(seq, _, _) => ser.serialize_field("s", seq)?,
             GatewayPacket::Heartbeat(seq) => ser.serialize_field("s", seq)?,
             _ => ser.skip_field("s")?,
         }
         match self {
-            GatewayPacket::Dispatch(_, _) => { }
+            GatewayPacket::Dispatch(_, _, _) => { }
             _ => ser.skip_field("t")?,
         }
         match self {
-            GatewayPacket::Dispatch(_, ev) =>
+            GatewayPacket::Dispatch(_, _, Some(ev)) =>
                 return ev.serialize(SerializeEvent::<S>(is_human_readable, ser)),
-            GatewayPacket::IgnoredDispatch(_) => ser.serialize_field("t", "__IGNORED")?,
+            GatewayPacket::Dispatch(_, t, None) => {
+                ser.serialize_field("t", t)?;
+                ser.serialize_field("d", &())?;
+            }
             GatewayPacket::Heartbeat(_) => ser.serialize_field("d", &())?,
             GatewayPacket::Identify(op) => ser.serialize_field("d", op)?,
             GatewayPacket::StatusUpdate(op) => ser.serialize_field("d", op)?,
@@ -256,24 +286,70 @@ impl Serialize for GatewayPacket {
             GatewayPacket::InvalidSession(op) => ser.serialize_field("d", op)?,
             GatewayPacket::Hello(op) => ser.serialize_field("d", op)?,
             GatewayPacket::HeartbeatAck => ser.serialize_field("d", &())?,
-            GatewayPacket::UnknownOpcode => ser.serialize_field("d", &())?,
+            GatewayPacket::UnknownOpcode(_) => ser.serialize_field("d", &())?,
         }
         ser.end()
     }
 }
 impl <'de> Deserialize<'de> for GatewayPacket {
     fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+        (GatewayPacketSeed { is_ignored: |_| false }).deserialize(deserializer)
+    }
+}
+
+struct GatewayPacketSeed<F: Fn(&GatewayEventType) -> bool> {
+    is_ignored: F,
+}
+impl <'de, F: Fn(&GatewayEventType) -> bool> DeserializeSeed<'de> for GatewayPacketSeed<F> {
+    type Value = GatewayPacket;
+
+    fn deserialize<D>(
+        self, deserializer: D,
+    ) -> StdResult<Self::Value, D::Error> where D: Deserializer<'de> {
         deserializer.deserialize_struct(
-            "GatewayPacket", &["op", "s", "t", "d"], GatewayPacketVisitor,
+            "GatewayPacket", &["op", "s", "t", "d"],
+            GatewayPacketVisitor { is_ignored: self.is_ignored },
         )
     }
 }
 
-fn or_missing<T, A: DeError>(o: Option<T>, name: &'static str) -> StdResult<T, A> {
-    o.ok_or_else(|| A::missing_field(name))
-}
-
 // TODO: Abstract over maybe null but potentially duplicated fields.
+struct MaybeMissing<T> {
+    name: &'static str,
+    data: Option<T>,
+    found: bool,
+}
+impl <T> MaybeMissing<T> {
+    fn new(name: &'static str) -> Self {
+        MaybeMissing {
+            name, data: None, found: false,
+        }
+    }
+    fn push_field<D: DeError>(
+        &mut self, parse: impl FnOnce() -> StdResult<Option<T>, D>,
+    ) -> StdResult<(), D> {
+        if self.found {
+            return Err(D::duplicate_field(self.name))
+        }
+        self.found = true;
+        self.data = parse()?;
+        Ok(())
+    }
+    fn check_present<D: DeError>(&self) -> StdResult<(), D> {
+        if self.data.is_none() || !self.found {
+            return Err(D::missing_field(self.name))
+        }
+        Ok(())
+    }
+    fn get<D: DeError>(&self) -> StdResult<&T, D> {
+        self.check_present()?;
+        Ok(self.data.as_ref().unwrap())
+    }
+    fn take<D: DeError>(&mut self) -> StdResult<T, D> {
+        self.check_present()?;
+        Ok(self.data.take().unwrap())
+    }
+}
 
 #[derive(Deserialize, Copy, Clone, Debug)]
 #[serde(field_identifier, rename_all = "lowercase")]
@@ -288,8 +364,10 @@ fn deserialize_as<T: DeserializeOwned, E: DeError>(val: String) -> StdResult<T, 
         Err(e) => Err(E::custom(e)),
     }
 }
-struct GatewayPacketVisitor;
-impl <'de> Visitor<'de> for GatewayPacketVisitor {
+struct GatewayPacketVisitor<F: Fn(&GatewayEventType) -> bool> {
+    is_ignored: F,
+}
+impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisitor<F> {
     type Value = GatewayPacket;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("gateway packet struct")
@@ -298,54 +376,51 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
     fn visit_map<A>(
         self, mut map: A,
     ) -> StdResult<Self::Value, A::Error> where A: MapAccess<'de> {
-        let mut op = None;
-        let mut s = None;
-        let mut found_s = false;
-        let mut t = None;
-        let mut found_t = false;
+        let mut op = MaybeMissing::new("op");
+        let mut s = MaybeMissing::new("s");
+        let mut t = MaybeMissing::new("t");
+
         let mut d = None;
         let mut delayed_d = None;
         let mut skipped_d = false;
 
+        let ignored_pkt = |t: &GatewayEventType| match t {
+            GatewayEventType::Unknown(_) => true,
+            _ => (self.is_ignored)(t),
+        };
+
         while let Some(field) = map.next_key::<GatewayPacketField>()? {
             match field {
-                GatewayPacketField::Op => match op {
-                    Some(_) => return Err(A::Error::duplicate_field("op")),
-                    None => op = Some(map.next_value::<GatewayOpcode>()?),
-                },
-                GatewayPacketField::S => match s {
-                    Some(_) => return Err(A::Error::duplicate_field("s")),
-                    None => {
-                        if found_s {
-                            return Err(A::Error::duplicate_field("s"));
-                        }
-                        s = map.next_value::<Option<PacketSequenceID>>()?;
-                        found_s = true;
-                    },
-                },
-                GatewayPacketField::T => match t {
-                    Some(_) => return Err(A::Error::duplicate_field("t")),
-                    None => {
-                        if found_t {
-                            return Err(A::Error::duplicate_field("t"));
-                        }
-                        t = map.next_value::<Option<GatewayEventType>>()?;
-                        found_t = true;
-                    },
-                },
+                GatewayPacketField::Op => op.push_field(||
+                    map.next_value::<i128>().map(GatewayOpcode::from_i128).map(Some)
+                )?,
+                GatewayPacketField::S => s.push_field(||
+                    map.next_value::<Option<PacketSequenceID>>()
+                )?,
+                GatewayPacketField::T => t.push_field(||
+                    map.next_value::<Option<GatewayEventType>>()
+                )?,
                 GatewayPacketField::D => {
                     if d.is_some() || delayed_d.is_some() || skipped_d {
                         return Err(A::Error::duplicate_field("d"))
                     }
-                    if let Some(op) = op {
-                        match op {
-                            GatewayOpcode::Dispatch => if let Some(t) = &mut t {
-                                let de = DeserializeGatewayEvent(
-                                    *t, &mut map, MapAccessPhase::Content, PhantomData,
-                                );
-                                d = Some(GatewayPacket::Dispatch(
-                                    PacketSequenceID(!0), GatewayEvent::deserialize(de)?,
-                                ));
+                    if !op.found {
+                        delayed_d = Some(map.next_value::<Value>()?.to_string());
+                    } else {
+                        match op.get()? {
+                            GatewayOpcode::Dispatch => if t.found {
+                                let null_id = PacketSequenceID(!0);
+                                let t = t.take()?;
+                                if ignored_pkt(&t) {
+                                    map.next_value::<IgnoredAny>()?;
+                                    d = Some(GatewayPacket::Dispatch(null_id, t, None))
+                                } else {
+                                    let de = DeserializeGatewayEvent(
+                                        &t, &mut map, MapAccessPhase::Content, PhantomData,
+                                    );
+                                    let ev = GatewayEvent::deserialize(de)?;
+                                    d = Some(GatewayPacket::Dispatch(null_id, t, Some(ev)));
+                                }
                             } else {
                                 delayed_d = Some(map.next_value::<Value>()?.to_string());
                             },
@@ -363,15 +438,11 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                                 d = Some(GatewayPacket::InvalidSession(map.next_value()?)),
                             GatewayOpcode::Hello =>
                                 d = Some(GatewayPacket::Hello(map.next_value()?)),
-                            GatewayOpcode::IgnoredDispatch =>
-                                d = Some(GatewayPacket::IgnoredDispatch(PacketSequenceID(!0))),
                             _ => {
                                 map.next_value::<IgnoredAny>()?;
                                 skipped_d = true;
                             }
                         }
-                    } else {
-                        delayed_d = Some(map.next_value::<Value>()?.to_string());
                     }
                 }
                 GatewayPacketField::Other => { }
@@ -382,8 +453,8 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
             // The happy path where t/op came before d.
             // The only thing we may have to set is s in Dispatch.
             match &mut d {
-                GatewayPacket::Dispatch(s_pos, _) | GatewayPacket::IgnoredDispatch(s_pos) =>
-                    *s_pos = or_missing(s, "s")?,
+                GatewayPacket::Dispatch(s_pos, _, _) =>
+                    *s_pos = s.take()?,
                 _ => { }
             }
             d
@@ -396,15 +467,19 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
             // We deserialize into a json string to avoid massive code bloat from having three
             // versions of this deserializer. (one for json Value, one for the internal serde
             // Value, and a third for the actual json deserializer).
-            match or_missing(op, "op")? {
+            match op.take()? {
                 GatewayOpcode::Dispatch => {
-                    let s = or_missing(s, "s")?;
-                    let t: &'static str = or_missing(t, "t")?.into();
-                    let json = format!(r#"{{"{}":{}}}"#, t, delayed_d);
-                    GatewayPacket::Dispatch(s, deserialize_as(json)?)
+                    let t = t.take()?;
+                    if ignored_pkt(&t) {
+                        GatewayPacket::Dispatch(s.take()?, t, None)
+                    } else {
+                        let t_str: &'static str = (&t).into();
+                        let json = format!(r#"{{"{}":{}}}"#, t_str, delayed_d);
+                        GatewayPacket::Dispatch(s.take()?, t, Some(deserialize_as(json)?))
+                    }
                 },
                 GatewayOpcode::Heartbeat =>
-                    GatewayPacket::Heartbeat(s),
+                    GatewayPacket::Heartbeat(s.data.take()),
                 GatewayOpcode::Identify =>
                     GatewayPacket::Identify(deserialize_as(delayed_d)?),
                 GatewayOpcode::StatusUpdate =>
@@ -423,23 +498,17 @@ impl <'de> Visitor<'de> for GatewayPacketVisitor {
                     GatewayPacket::Hello(deserialize_as(delayed_d)?),
                 GatewayOpcode::HeartbeatAck =>
                     GatewayPacket::HeartbeatAck,
-                GatewayOpcode::IgnoredDispatch =>
-                    GatewayPacket::IgnoredDispatch(or_missing(s, "s")?),
-                GatewayOpcode::Unknown =>
-                    GatewayPacket::UnknownOpcode,
+                GatewayOpcode::Unknown(op) =>
+                    GatewayPacket::UnknownOpcode(op),
             }
         } else {
             // We got s before d, but we were going to ignore d anyway, or we didn't get d at all.
-            if let Some(op) = op {
-                match op {
-                    GatewayOpcode::Heartbeat => GatewayPacket::Heartbeat(s),
-                    GatewayOpcode::Reconnect => GatewayPacket::Reconnect,
-                    GatewayOpcode::HeartbeatAck => GatewayPacket::HeartbeatAck,
-                    GatewayOpcode::Unknown => GatewayPacket::UnknownOpcode,
-                    _ => return Err(A::Error::missing_field("d")),
-                }
-            } else {
-                return Err(A::Error::missing_field("op"))
+            match op.take()? {
+                GatewayOpcode::Heartbeat => GatewayPacket::Heartbeat(s.data.take()),
+                GatewayOpcode::Reconnect => GatewayPacket::Reconnect,
+                GatewayOpcode::HeartbeatAck => GatewayPacket::HeartbeatAck,
+                GatewayOpcode::Unknown(op) => GatewayPacket::UnknownOpcode(op),
+                _ => return Err(A::Error::missing_field("d")),
             }
         })
     }
@@ -455,7 +524,7 @@ enum MapAccessPhase {
     Content, End,
 }
 struct DeserializeGatewayEvent<'a, 'de: 'a, A: MapAccess<'de>>(
-    GatewayEventType, &'a mut A, MapAccessPhase, PhantomData<fn(&'de ()) -> &'de ()>,
+    &'a GatewayEventType, &'a mut A, MapAccessPhase, PhantomData<fn(&'de ()) -> &'de ()>,
 );
 impl <'a, 'de: 'a, A: MapAccess<'de>> EnumAccess<'de> for DeserializeGatewayEvent<'a, 'de, A> {
     type Error = A::Error;

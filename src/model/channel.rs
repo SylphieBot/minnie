@@ -1,7 +1,9 @@
 //! Types related to Discord channels.
 
+use chrono::{DateTime, Utc};
 use crate::errors::*;
 use crate::model::types::*;
+use crate::model::guild::*;
 use crate::model::user::*;
 use crate::model::utils;
 use enumset::*;
@@ -14,12 +16,21 @@ use serde_repr::*;
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
 pub enum ChannelType {
+    /// A normal text channel in a guild.
     GuildText = 0,
+    /// A direct message channel.
     Dm = 1,
+    /// A voice channel in a guild.
     GuildVoice = 2,
+    /// A group DM channel.
     GroupDm = 3,
+    /// A category in a guild.
     GuildCategory = 4,
+    /// A news text channel in a guild.
     GuildNews = 5,
+    /// A store channel in a guild.
+    GuildStore = 6,
+    /// An unrecognized channel type.
     #[serde(other)]
     Unknown = i32::max_value(),
 }
@@ -52,6 +63,7 @@ pub enum Permission {
     MoveMembers = 24,
     UseVoiceActivity = 25,
     PrioritySpeaker = 8,
+    Stream = 9,
     ChangeNickname = 26,
     ManageNicknames = 27,
     ManageRoles = 28,
@@ -62,13 +74,13 @@ pub enum Permission {
 /// The type of id in a raw permission overwrite.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "lowercase")]
-pub enum RawPermissionOverwriteType {
+enum RawPermissionOverwriteType {
     Role, Member,
 }
 
 /// A permission overwrite in a Discord channel, before the id/type fields are properly parsed out.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct RawPermissionOverwrite {
+struct RawPermissionOverwrite {
     id: u64,
     #[serde(rename = "type")]
     _type: RawPermissionOverwriteType,
@@ -82,13 +94,13 @@ pub enum PermissionOverwriteId {
     Role(RoleId),
 }
 impl PermissionOverwriteId {
-    pub fn raw_id(self) -> u64 {
+    fn raw_id(self) -> u64 {
         match self {
             PermissionOverwriteId::Member(id) => id.0,
             PermissionOverwriteId::Role(id) => id.0,
         }
     }
-    pub fn raw_type(self) -> RawPermissionOverwriteType {
+    fn raw_type(self) -> RawPermissionOverwriteType {
         match self {
             PermissionOverwriteId::Member(_) => RawPermissionOverwriteType::Member,
             PermissionOverwriteId::Role(_) => RawPermissionOverwriteType::Role,
@@ -99,9 +111,9 @@ impl PermissionOverwriteId {
 /// A permission overwrite in a Discord channel.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PermissionOverwrite {
-    id: PermissionOverwriteId,
-    allow: EnumSet<Permission>,
-    deny: EnumSet<Permission>,
+    pub id: PermissionOverwriteId,
+    pub allow: EnumSet<Permission>,
+    pub deny: EnumSet<Permission>,
 }
 
 impl From<PermissionOverwrite> for RawPermissionOverwrite {
@@ -144,26 +156,54 @@ impl <'de> Deserialize<'de> for PermissionOverwrite {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct Channel {
-    id: CategoryId,
+    pub id: CategoryId,
     #[serde(rename = "type")]
-    _type: ChannelType,
-    guild_id: Option<GuildId>,
-    position: Option<u32>,
+    pub _type: ChannelType,
+    pub guild_id: Option<GuildId>,
+    pub position: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    permission_overwrites: Vec<PermissionOverwrite>,
-    name: Option<String>,
-    topic: Option<String>,
+    pub permission_overwrites: Vec<PermissionOverwrite>,
+    pub name: Option<String>,
+    pub topic: Option<String>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
-    nsfw: bool,
-    last_message_id: Option<MessageId>,
-    bitrate: Option<u32>,
-    user_limit: Option<u32>,
-    rate_limit_per_user: Option<u32>,
-    recipients: Vec<PartialUser>,
-    icon: Option<String>,
-    owner_id: Option<UserId>,
-    application_id: Option<ApplicationId>,
-    parent_id: Option<CategoryId>,
-    // TODO last_pin_timestamp
+    pub nsfw: bool,
+    pub last_message_id: Option<MessageId>,
+    pub bitrate: Option<u32>,
+    pub user_limit: Option<u32>,
+    pub rate_limit_per_user: Option<u32>,
+    pub recipients: Vec<User>,
+    pub icon: Option<String>,
+    pub owner_id: Option<UserId>,
+    pub application_id: Option<ApplicationId>,
+    pub parent_id: Option<CategoryId>,
+    pub last_pin_timestamp: DateTime<Utc>,
 }
 
+/// Information related to a message in a Discord channel.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct Message {
+	id: MessageId,
+	channel_id: ChannelId,
+	guild_id: Option<GuildId>,
+	author: User,
+	// TODO: member field
+	content: String,
+	timestamp: DateTime<Utc>,
+	edited_timestamp: Option<DateTime<Utc>>,
+	tts: bool,
+	mention_everyone: bool,
+	// TODO: mentions
+	mention_roles: Vec<RoleId>,
+	// TODO: attachments
+	// TODO: embeds
+	// TODO: reactions
+	// TODO: nonce
+	pinned: bool,
+	webhook_id: Option<WebhookId>,
+	// TODO: type
+	// TODO: activity
+	// TODO: application
+	// TODO: message_reference
+	// TODO: flags
+}

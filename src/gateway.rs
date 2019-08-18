@@ -65,20 +65,22 @@ pub enum GatewayError<T: GatewayHandler> {
     /// The event handler panicked.
     EventHandlingPanicked(Error),
     /// An unknown opcode was encountered.
-    UnknownOpcode,
+    UnknownOpcode(i128),
+    /// An unknown event was encountered.
+    UnknownEvent(String),
     /// The gateway panicked. This error forces a complete shutdown of the gateway.
     Panicked(Error),
 }
 impl <T: GatewayHandler> GatewayError<T> {
     /// Returns a string representing the type of error that occurred.
-    fn error_str(&self, shard: ShardId) -> String {
+    pub fn error_str(&self, shard: ShardId) -> String {
         match self {
             GatewayError::HelloTimeout =>
                 format!("Shard #{} disconnected: Did not receieve Hello", shard),
             GatewayError::HeartbeatTimeout =>
                 format!("Shard #{} disconnected: Did not receive Heartbeat ACK", shard),
-            GatewayError::RemoteHostDisconnected(_) =>
-                format!("Shard #{} disconnected", shard),
+            GatewayError::RemoteHostDisconnected(data) =>
+                format!("Shard #{} disconnected: {:?}", shard, data),
             GatewayError::ConnectionError(_) =>
                 format!("Shard #{} failed to connect", shard),
             GatewayError::AuthenticationFailure =>
@@ -90,14 +92,31 @@ impl <T: GatewayHandler> GatewayError<T> {
                 format!("Shard #{} could not send message", shard),
             GatewayError::UnexpectedPacket(_) =>
                 format!("Shard #{} received an unexpected packet", shard),
-            GatewayError::UnknownOpcode =>
-                format!("Shard #{} received an unknown packet", shard),
+            GatewayError::UnknownOpcode(op) =>
+                format!("Shard #{} received an unknown packet: {}", shard, op),
+            GatewayError::UnknownEvent(name) =>
+                format!("Shard #{} received an unknown event: {}", shard, name),
             GatewayError::EventHandlingFailed(_) =>
                 format!("Shard #{} encountered an error in its event handler", shard),
             GatewayError::EventHandlingPanicked(_) =>
                 format!("Shard #{} panicked in its event handler", shard),
             GatewayError::Panicked(_) =>
                 format!("Shard #{} panicked", shard),
+        }
+    }
+
+    pub fn fail(&self) -> Option<&dyn Fail> {
+        match self {
+            GatewayError::ConnectionError(err) |
+            GatewayError::WebsocketError(err) |
+            GatewayError::WebsocketSendError(err) |
+            GatewayError::PacketParseFailed(err) |
+            GatewayError::EventHandlingPanicked(err) |
+            GatewayError::Panicked(err) =>
+                Some(err),
+            GatewayError::EventHandlingFailed(err) =>
+                Some(err),
+            _ => None,
         }
     }
 }
@@ -113,18 +132,6 @@ pub enum GatewayResponse {
     /// Attempt to ignore the error. This is not possible for all error statuses, and may cause
     /// the gateway to reconnect instead.
     Ignore,
-}
-
-fn report_fail(buf: &mut String, err: impl Fail) {
-    write!(buf, ": {}", err).unwrap();
-    let mut cause = err.cause();
-    while let Some(c) = cause {
-        write!(buf, "\nCaused by: {}", c).unwrap();
-        cause = c.cause();
-    }
-    if let Some(bt) = find_backtrace(&err) {
-        write!(buf, "\nBacktrace:\n{}", bt).unwrap();
-    }
 }
 
 /// Handles events dispatched to a gateway.
@@ -152,21 +159,19 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     #[inline(never)]
     fn report_error(&self, ctx: &DiscordContext, shard: ShardId, err: GatewayError<Self>) {
         let mut buf = err.error_str(shard);
-        match err {
-            GatewayError::ConnectionError(err) |
-            GatewayError::WebsocketError(err) |
-            GatewayError::WebsocketSendError(err) |
-            GatewayError::PacketParseFailed(err) |
-            GatewayError::EventHandlingPanicked(err) |
-            GatewayError::Panicked(err) => report_fail(&mut buf, err),
-            GatewayError::EventHandlingFailed(err) => report_fail(&mut buf, err),
-            GatewayError::UnexpectedPacket(packet) => write!(buf, ": {:?}", packet).unwrap(),
-            GatewayError::RemoteHostDisconnected(Some(cd)) => write!(buf, ": {:?}", cd).unwrap(),
-            GatewayError::AuthenticationFailure |
-            GatewayError::UnknownOpcode |
-            GatewayError::HelloTimeout |
-            GatewayError::HeartbeatTimeout |
-            GatewayError::RemoteHostDisconnected(None) => {}
+        if let GatewayError::UnexpectedPacket(pkt) = &err {
+            write!(buf, ": {:?}", pkt).unwrap();
+        }
+        if let Some(fail) = err.fail() {
+            write!(buf, ": {}", fail).unwrap();
+            let mut cause = fail.cause();
+            while let Some(c) = cause {
+                write!(buf, "\nCaused by: {}", c).unwrap();
+                cause = c.cause();
+            }
+            if let Some(bt) = find_backtrace(fail) {
+                write!(buf, "\nBacktrace:\n{}", bt).unwrap();
+            }
         }
         error!("{}", buf);
     }
@@ -180,8 +185,20 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
             GatewayError::UnexpectedPacket(_) => GatewayResponse::Ignore,
             GatewayError::EventHandlingFailed(_) => GatewayResponse::Ignore,
             GatewayError::EventHandlingPanicked(_) => GatewayResponse::Ignore,
+            GatewayError::UnknownOpcode(_) => GatewayResponse::Ignore,
+            GatewayError::UnknownEvent(_) => GatewayResponse::Ignore,
             _ => GatewayResponse::Reconnect,
         }
+    }
+
+    /// Decides whether to ignore a type of event.
+    ///
+    /// For any event where this method returns `true`, the library will not parse the event,
+    /// and [`GatewayHandler::on_event`] will not be called.
+    ///
+    /// Returns `false` by default.
+    fn ignores_event(&self, _: &DiscordContext, _: ShardId, pkt: &GatewayEventType) -> bool {
+        false
     }
 }
 
@@ -364,7 +381,9 @@ async fn running_shard(
     loop {
         // Try to read a packet from the gateway for one second, before processing other tasks.
         let mut need_connect = false;
-        match conn.receive(GatewayPacket::from_json, Duration::from_secs(1)).await {
+        match conn.receive(|s| GatewayPacket::from_json(s, |t|
+            dispatch.ignores_event(ctx, state.id, t)
+        ), Duration::from_secs(1)).await {
             Ok(Some(GatewayPacket::Hello(packet))) if conn_phase == Initial => {
                 heartbeat_interval = packet.heartbeat_interval;
                 heartbeat_ack = true;
@@ -380,26 +399,30 @@ async fn running_shard(
                 // TODO Add random wait period.
                 need_connect = true;
             }
-            Ok(Some(GatewayPacket::IgnoredDispatch(seq))) if conn_phase != Initial => {
-                session.set_sequence_id(seq);
-            }
-            Ok(Some(GatewayPacket::Dispatch(seq, data))) if conn_phase != Initial => {
+            Ok(Some(GatewayPacket::Dispatch(seq, t, data))) if conn_phase != Initial => {
                 conn_phase = Connected; // We assume we connected successfully if we got any event.
                 conn_successful = true;
                 state.is_connected.store(true, Ordering::Relaxed);
-                if let GatewayEvent::Ready(ev) = &data {
-                    *session = ShardSession::Resume(ev.session_id.clone(), seq);
+                if let Some(data) = data {
+                    if let GatewayEvent::Ready(ev) = &data {
+                        *session = ShardSession::Resume(ev.session_id.clone(), seq);
+                    } else {
+                        session.set_sequence_id(seq);
+                    }
+                    match Error::catch_panic(|| Ok(dispatch.on_event(ctx, state.id, data))) {
+                        Ok(Err(e)) => emit_err!(GatewayError::EventHandlingFailed(e), true),
+                        Err(e) => emit_err!(GatewayError::EventHandlingPanicked(e), true),
+                        _ => { }
+                    }
                 } else {
-                    session.set_sequence_id(seq);
-                }
-                match Error::catch_panic(|| Ok(dispatch.on_event(ctx, state.id, data))) {
-                    Ok(Err(e)) => emit_err!(GatewayError::EventHandlingFailed(e), true),
-                    Err(e) => emit_err!(GatewayError::EventHandlingPanicked(e), true),
-                    _ => { }
+                    if let GatewayEventType::Unknown(ev) = t {
+                        emit_err!(GatewayError::UnknownEvent(ev), true);
+                    }
                 }
             }
             Ok(Some(GatewayPacket::HeartbeatAck)) => heartbeat_ack = true,
-            Ok(Some(GatewayPacket::UnknownOpcode)) => emit_err!(GatewayError::UnknownOpcode, true),
+            Ok(Some(GatewayPacket::UnknownOpcode(v))) =>
+                emit_err!(GatewayError::UnknownOpcode(v), true),
             Ok(Some(packet)) => emit_err!(GatewayError::UnexpectedPacket(packet), true),
             Ok(None) => { }
             Err(e) => match e.error_kind() {

@@ -1,5 +1,6 @@
 //! Types relating to Discord events.
 
+use chrono::{DateTime, Utc};
 use crate::errors::*;
 use crate::model::channel::*;
 use crate::model::guild::*;
@@ -7,8 +8,13 @@ use crate::model::types::*;
 use crate::model::user::*;
 use crate::model::utils;
 use enumset::*;
+use serde::{Serialize, Deserialize};
+use serde::de::{Error as DeError, Deserializer, Visitor};
+use serde::ser::{Error as SerError, Serializer};
 use serde_derive::*;
 use serde_repr::*;
+use std::fmt::{Formatter, Result as FmtResult};
+use std::str::FromStr;
 use std::time::SystemTime;
 use strum_macros::*;
 
@@ -137,6 +143,20 @@ pub struct ChannelUpdateEvent(pub Channel);
 #[serde(transparent)]
 pub struct ChannelDeleteEvent(pub Channel);
 
+/// A `Channel Pins Update` event.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct ChannelPinsUpdateEvent {
+    guild_id: Option<GuildId>,
+    channel_id: ChannelId,
+    last_pin_timestamp: DateTime<Utc>,
+}
+
+/// A `Message Create` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct MessageCreateEvent(pub Message);
+
 /// A `Presence Update` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -159,7 +179,7 @@ pub struct PresenceUpdateEvent {
 
 /// A `Presence Update` event that failed to parse.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct MalformedPresenceUpdateEvent {
+pub(crate) struct MalformedPresenceUpdateEvent {
     #[serde(with = "utils::id_only_user")]
     pub id: UserId,
 }
@@ -170,7 +190,7 @@ pub struct MalformedPresenceUpdateEvent {
 pub struct ReadyEvent {
     #[serde(rename = "v")]
     pub version: i32,
-    pub user: User,
+    pub user: FullUser,
     pub private_channels: Vec<ChannelId>,
     pub guilds: Vec<UnavailableGuild>,
     pub session_id: SessionId,
@@ -184,7 +204,7 @@ pub enum GatewayEvent {
     ChannelCreate(ChannelCreateEvent),
     ChannelUpdate(ChannelUpdateEvent),
     ChannelDelete(ChannelDeleteEvent),
-    ChannelPinsUpdate,
+    ChannelPinsUpdate(ChannelPinsUpdateEvent),
     GuildCreate,
     GuildUpdate,
     GuildDelete,
@@ -199,7 +219,7 @@ pub enum GatewayEvent {
     GuildRoleCreate,
     GuildRoleUpdate,
     GuildRoleDelete,
-    MessageCreate,
+    MessageCreate(MessageCreateEvent),
     MessageUpdate,
     MessageDelete,
     MessageDeleteBulk,
@@ -214,13 +234,10 @@ pub enum GatewayEvent {
     VoiceStateUpdate,
     VoiceServerUpdate,
     WebhooksUpdate,
-    #[serde(other)]
-    UnknownEvent,
 }
 
 /// An enum representing the type of event that occurred.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[derive(EnumString, Display, AsRefStr, IntoStaticStr)]
 #[strum(serialize_all = "shouty_snake_case")]
 pub enum GatewayEventType {
@@ -257,6 +274,51 @@ pub enum GatewayEventType {
     VoiceStateUpdate,
     VoiceServerUpdate,
     WebhooksUpdate,
-    #[serde(other)]
-    UnknownEvent,
+    #[strum(disabled="true")]
+    Unknown(String),
+}
+
+impl Serialize for GatewayEventType {
+    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+        if let GatewayEventType::Unknown(ev) = self {
+            serializer.serialize_str(ev)
+        } else {
+            let t: &'static str = self.into();
+            serializer.serialize_str(t)
+        }
+    }
+}
+
+impl <'de> Deserialize<'de> for GatewayEventType {
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_str(EventTypeVisitor)
+    }
+}
+
+struct EventTypeVisitor;
+impl <'de> Visitor<'de> for EventTypeVisitor {
+    type Value = GatewayEventType;
+    fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter.write_str("enum GatewayEventType")
+    }
+    fn visit_str<E>(self, v: &str) -> StdResult<Self::Value, E> where E: DeError {
+        Ok(match GatewayEventType::from_str(v) {
+            Ok(v) => v,
+            Err(_) => GatewayEventType::Unknown(v.to_string()),
+        })
+    }
+    fn visit_string<E>(self, v: String) -> StdResult<Self::Value, E> where E: DeError {
+        Ok(match GatewayEventType::from_str(&v) {
+            Ok(v) => v,
+            Err(_) => GatewayEventType::Unknown(v),
+        })
+    }
+    fn visit_bytes<E>(self, v: &[u8]) -> StdResult<Self::Value, E> where E: DeError {
+        let s = ::std::str::from_utf8(v).map_err(|_| E::custom("byte string is not UTF-8"))?;
+        self.visit_str(s)
+    }
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> StdResult<Self::Value, E> where E: DeError {
+        let s = String::from_utf8(v).map_err(|_| E::custom("byte string is not UTF-8"))?;
+        self.visit_string(s)
+    }
 }

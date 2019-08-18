@@ -86,8 +86,8 @@ pub struct ErrorData {
     pub cause: Option<Box<dyn Fail>>,
 }
 
-pub(crate) fn find_backtrace(fail: &impl Fail) -> Option<&Backtrace> {
-    let mut current: Option<&dyn Fail> = Some(fail);
+pub(crate) fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
+    let mut current: Option<&dyn Fail> = Some(&*fail);
     while let Some(x) = current {
         if let Some(bt) = x.backtrace() {
             let s = bt.to_string();
