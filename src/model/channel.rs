@@ -5,11 +5,7 @@ use crate::errors::*;
 use crate::model::types::*;
 use crate::model::guild::*;
 use crate::model::user::*;
-use crate::model::utils;
-use enumset::*;
-use serde::*;
-use serde_derive::*;
-use serde_repr::*;
+use crate::serde::*;
 
 /// The type of an channel.
 #[derive(Serialize_repr, Deserialize_repr)]

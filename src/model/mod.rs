@@ -7,4 +7,3 @@ pub mod gateway;
 pub mod guild;
 pub mod types;
 pub mod user;
-mod utils;

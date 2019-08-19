@@ -3,16 +3,7 @@
 use crate::errors::*;
 use crate::model::event::*;
 use crate::model::types::*;
-use crate::model::utils;
-use serde::*;
-use serde::de::{
-    IgnoredAny, IntoDeserializer, DeserializeSeed, DeserializeOwned, Visitor, MapAccess,
-    Error as DeError, EnumAccess, VariantAccess,
-};
-use serde::ser::{SerializeStruct, Error as SerError, Impossible};
-use serde_derive::*;
-use serde_repr::*;
-use serde_json::{json, Value};
+use crate::serde::*;
 use std::fmt;
 use std::marker::PhantomData;
 use std::mem::replace;
@@ -313,7 +304,6 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> DeserializeSeed<'de> for GatewayPac
     }
 }
 
-// TODO: Abstract over maybe null but potentially duplicated fields.
 struct MaybeMissing<T> {
     name: &'static str,
     data: Option<T>,
@@ -405,7 +395,7 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
                         return Err(A::Error::duplicate_field("d"))
                     }
                     if !op.found {
-                        delayed_d = Some(map.next_value::<Value>()?.to_string());
+                        delayed_d = Some(map.next_value::<JsonValue>()?.to_string());
                     } else {
                         match op.get()? {
                             GatewayOpcode::Dispatch => if t.found {
@@ -422,7 +412,7 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
                                     d = Some(GatewayPacket::Dispatch(null_id, t, Some(ev)));
                                 }
                             } else {
-                                delayed_d = Some(map.next_value::<Value>()?.to_string());
+                                delayed_d = Some(map.next_value::<JsonValue>()?.to_string());
                             },
                             GatewayOpcode::Identify =>
                                 d = Some(GatewayPacket::Identify(map.next_value()?)),

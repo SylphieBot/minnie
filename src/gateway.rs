@@ -23,6 +23,7 @@ use tokio::sync::mpsc::error::UnboundedRecvError;
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
 // TODO: Allow setting guild_subscriptions.
 // TODO: Do not resume after certain kinds of errors. (ones that are likely to recur if we do)
+// TODO: Try to avoid resume loops.
 
 #[derive(Debug)]
 /// The type of error reported to an [`EventDispatch`].
@@ -107,7 +108,7 @@ impl <T: GatewayHandler> GatewayError<T> {
         }
     }
 
-    pub fn fail(&self) -> Option<&dyn Fail> {
+    pub fn as_fail(&self) -> Option<&dyn Fail> {
         match self {
             GatewayError::ConnectionError(err) |
             GatewayError::WebsocketError(err) |
@@ -164,7 +165,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
         if let GatewayError::UnexpectedPacket(pkt) = &err {
             write!(buf, ": {:?}", pkt).unwrap();
         }
-        if let Some(fail) = err.fail() {
+        if let Some(fail) = err.as_fail() {
             write!(buf, ": {}", fail).unwrap();
             let mut cause = fail.cause();
             while let Some(c) = cause {
@@ -179,7 +180,10 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     }
 
     /// Decides how the gateway should respond to a particular error.
-    #[inline(always)]
+    ///
+    /// By default, this ignores errors originating in [`GatewayHandler`], unknown packets, and
+    /// unknown events.
+    #[inline(never)]
     fn on_error(
         &self, _: &DiscordContext, _: ShardId, err: &GatewayError<Self>,
     ) -> GatewayResponse {
@@ -190,6 +194,21 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
             GatewayError::UnknownOpcode(_) => GatewayResponse::Ignore,
             GatewayError::UnknownEvent(_) => GatewayResponse::Ignore,
             _ => GatewayResponse::Reconnect,
+        }
+    }
+
+    /// Decides if the gateway can attempt to resume a session after a certain error.
+    ///
+    /// By default, this returns false for errors inherent to the packet data itself, hence will
+    /// likely recur on an `Resume` attempt.
+    #[inline(never)]
+    fn can_resume(
+        &self, _: &DiscordContext, _: ShardId, err: &GatewayError<Self>,
+    ) -> bool {
+        match err {
+            GatewayError::PacketParseFailed(_) => false,
+            GatewayError::UnknownEvent(_) => false,
+            _ => true,
         }
     }
 
@@ -335,18 +354,22 @@ async fn running_shard(
     // backoff should be used or reset.
     let mut conn_successful = false;
     macro_rules! emit_err {
-        (@ret_success) => {
+        (@check_end_sess $err:ident) => {
+            if !dispatch.can_resume(ctx, state.id, &$err) {
+                *session = ShardSession::Inactive;
+            }
+        };
+        (@ret_success) => {{
             if conn_successful {
                 return ShardStatus::Reconnect
             } else {
                 return ShardStatus::ReconnectWithBackoff
             }
-        };
+        }};
         (@emit $error:expr, $ignore_case:expr $(,)?) => {{
             let err = $error;
             let response = dispatch.on_error(ctx, state.id, &err);
             dispatch.report_error(ctx, state.id, err);
-            debug!("Error response: {:?}", response);
             match response {
                 GatewayResponse::Shutdown => return ShardStatus::Shutdown,
                 GatewayResponse::Ignore => $ignore_case,
@@ -482,6 +505,7 @@ async fn running_shard(
             }
         }
         if do_disconnect {
+            *session = ShardSession::Inactive;
             return ShardStatus::Shutdown
         }
         if do_presence_update {

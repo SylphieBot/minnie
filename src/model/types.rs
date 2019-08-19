@@ -1,9 +1,8 @@
 //! A crate containing basic types common to all API calls.
 
 use crate::errors::*;
-use crate::model::utils;
+use crate::serde::*;
 use reqwest::header::HeaderValue;
-use serde_derive::*;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;

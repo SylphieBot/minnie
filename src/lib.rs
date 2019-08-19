@@ -10,6 +10,7 @@ pub mod context;
 pub mod gateway;
 pub mod http;
 pub mod model;
+mod serde;
 mod ws;
 
 pub mod prelude {

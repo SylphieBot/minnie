@@ -1,8 +1,5 @@
 use crate::model::types::*;
-use crate::model::utils;
-use enumset::*;
-use serde_derive::*;
-use serde_repr::*;
+use crate::serde::*;
 
 /// A struct representing a partial Discord user. Returned by most events involving users.
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

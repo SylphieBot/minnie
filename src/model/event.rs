@@ -6,17 +6,10 @@ use crate::model::channel::*;
 use crate::model::guild::*;
 use crate::model::types::*;
 use crate::model::user::*;
-use crate::model::utils;
-use enumset::*;
-use serde::{Serialize, Deserialize};
-use serde::de::{Error as DeError, Deserializer, Visitor};
-use serde::ser::{Error as SerError, Serializer};
-use serde_derive::*;
-use serde_repr::*;
+use crate::serde::*;
 use std::fmt::{Formatter, Result as FmtResult};
 use std::str::FromStr;
 use std::time::SystemTime;
-use strum_macros::*;
 
 /// An activity type for user presence updates.
 #[derive(Serialize_repr, Deserialize_repr)]
