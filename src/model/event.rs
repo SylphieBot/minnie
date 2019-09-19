@@ -266,8 +266,7 @@ pub struct MessageUpdateEvent {
     pub attachments: Option<Vec<Attachment>>,
 	pub embeds: Option<Vec<Embed>>,
     pub reactions: Option<Vec<Reaction>>,
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "utils::snowflake_opt")]
-    pub nonce: Option<u64>,
+    pub nonce: Option<Snowflake>,
 	pub pinned: Option<bool>,
 	pub webhook_id: Option<WebhookId>,
     #[serde(rename = "type")]

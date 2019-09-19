@@ -153,5 +153,4 @@ pub mod utils {
     }
 
     option_wrapper!(system_time_millis_opt, "system_time_millis", SystemTime);
-    option_wrapper!(snowflake_opt, "snowflake", u64);
 }

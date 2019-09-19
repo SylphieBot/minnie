@@ -41,8 +41,7 @@ enum RawPermissionOverwriteType {
 /// A permission overwrite in a Discord channel, before the id/type fields are properly parsed out.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 struct RawPermissionOverwrite {
-    #[serde(with = "utils::snowflake")]
-    id: u64,
+    id: Snowflake,
     #[serde(rename = "type")]
     overwrite_type: RawPermissionOverwriteType,
     allow: EnumSet<Permission>,
@@ -55,7 +54,7 @@ pub enum PermissionOverwriteId {
     Role(RoleId),
 }
 impl PermissionOverwriteId {
-    fn raw_id(self) -> u64 {
+    fn raw_id(self) -> Snowflake {
         match self {
             PermissionOverwriteId::Member(id) => id.0,
             PermissionOverwriteId::Role(id) => id.0,
@@ -342,8 +341,8 @@ pub struct Message {
 	pub embeds: Vec<Embed>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<Reaction>,
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "utils::snowflake_opt")]
-    pub nonce: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<Snowflake>,
 	pub pinned: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
 	pub webhook_id: Option<WebhookId>,

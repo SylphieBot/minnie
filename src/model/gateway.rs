@@ -385,7 +385,7 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
                                     d = Some(GatewayPacket::Dispatch(null_id, t, None))
                                 } else {
                                     let de = DeserializeGatewayEvent(
-                                        &t, &mut map, MapAccessPhase::Content, PhantomData,
+                                        &t, &mut map, PhantomData,
                                     );
                                     let ev = GatewayEvent::deserialize(de)?;
                                     d = Some(GatewayPacket::Dispatch(null_id, t, Some(ev)));
@@ -489,11 +489,8 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
 /// This avoids the adjacently tagged representation of [`GatewayEvent`], avoiding generating
 /// two deserializers for it, one for the internal Value thing serde uses, and another for when
 /// the tag comes first.
-enum MapAccessPhase {
-    Content, End,
-}
 struct DeserializeGatewayEvent<'a, 'de: 'a, A: MapAccess<'de>>(
-    &'a GatewayEventType, &'a mut A, MapAccessPhase, PhantomData<fn(&'de ()) -> &'de ()>,
+    &'a GatewayEventType, &'a mut A, PhantomData<fn(&'de ()) -> &'de ()>,
 );
 impl <'a, 'de: 'a, A: MapAccess<'de>> EnumAccess<'de> for DeserializeGatewayEvent<'a, 'de, A> {
     type Error = A::Error;
