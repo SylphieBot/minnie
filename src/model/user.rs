@@ -1,7 +1,9 @@
+use crate::model::channel::*;
+use crate::model::guild::*;
 use crate::model::types::*;
 use crate::serde::*;
 
-/// A struct representing a partial Discord user. Returned by most events involving users.
+/// A struct representing a Discord user. Returned by most events involving users.
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct User {
     pub id: UserId,
@@ -12,17 +14,32 @@ pub struct User {
     pub bot: bool,
 }
 
+/// A struct representing a Discord user with additional member information. Used as part of
+/// [`Message`]s returned by certain events.
+#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MentionUser {
+    #[serde(flatten)]
+    pub user: User,
+    pub member: Option<MemberInfo>,
+}
+
+/// A struct representing a partial Discord user. Exists in [`Presence Update`] events.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct PartialUser {
+    pub id: UserId,
+    pub username: Option<String>,
+    pub discriminator: Option<String>,
+    pub avatar: Option<String>,
+    pub bot: Option<bool>,
+}
+
 /// A struct representing a full Discord user. Returned only by the `/users/@me` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct FullUser {
-    pub id: UserId,
-    pub username: String,
-    pub discriminator: String,
-    #[serialize_always]
-    pub avatar: Option<String>,
-    #[serde(default, skip_serializing_if = "utils::if_false")]
-    pub bot: bool,
+    #[serde(flatten)]
+    pub user: User,
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub mfa_enabled: bool,
     pub locale: Option<String>,
@@ -31,18 +48,6 @@ pub struct FullUser {
     #[serde(default, skip_serializing_if = "EnumSet::is_empty")]
     pub flags: EnumSet<UserFlags>,
     pub premium_type: Option<UserPremiumType>,
-}
-
-impl From<FullUser> for User {
-    fn from(user: FullUser) -> Self {
-        User {
-            id: user.id,
-            username: user.username,
-            discriminator: user.discriminator,
-            avatar: user.avatar,
-            bot: user.bot,
-        }
-    }
 }
 
 /// Represents the flags for a particular user.

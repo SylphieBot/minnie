@@ -4,8 +4,10 @@ use crate::model::gateway::*;
 use std::future::Future;
 
 mod limits;
+mod model;
 
 use self::limits::{GlobalLimit, RateLimit, RateLimitSet};
+pub use self::model::*;
 
 #[derive(Default, Debug)]
 pub(crate) struct RateLimits {

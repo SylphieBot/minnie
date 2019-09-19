@@ -1,4 +1,4 @@
-#![feature(nll, async_await, bind_by_move_pattern_guards, checked_duration_since)]
+#![feature(nll)]
 #![deny(unused_must_use)]
 
 #[macro_use] extern crate derivative;

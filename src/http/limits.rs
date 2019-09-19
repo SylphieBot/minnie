@@ -195,6 +195,7 @@ async fn check_response(request: RequestBuilder) -> Result<ResponseStatus> {
             Ok(ResponseStatus::RateLimited(parse_headers(&response)?, rate_info.retry_after))
         }
     } else {
+        // TODO: Handle other HTTP errors.
         unimplemented!()
     }
 }
@@ -219,7 +220,8 @@ async fn perform_rate_limited<'a, T: DeserializeOwned>(
     loop {
         loop {
             if check_global_wait(global_limit).await { continue }
-            if check_route_wait(lock_raw_limit()).await { continue }
+            let fut = check_route_wait(lock_raw_limit());
+            if fut.await { continue }
             break
         }
         match check_response(make_request()).await? {

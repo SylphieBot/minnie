@@ -9,29 +9,6 @@ use std::marker::PhantomData;
 use std::mem::replace;
 use std::time::{SystemTime, Duration};
 
-/// The return value of the `Get Gateway` endpoint.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct GetGateway {
-    pub url: String,
-}
-
-/// The current limits on starting sessions.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct SessionStartLimit {
-    pub total: u32,
-    pub remaining: u32,
-    #[serde(with = "utils::duration_millis")]
-    pub reset_after: Duration,
-}
-
-/// The return value of the `Get Gateway Bot` endpoint.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct GetGatewayBot {
-    pub url: String,
-    pub shards: u32,
-    pub session_start_limit: SessionStartLimit,
-}
-
 /// The connection properties used for the `Identify` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ConnectionProperties {
@@ -89,7 +66,7 @@ pub struct PacketResume {
 /// The contents of the `Request Guild Members` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketRequestGuildMembers {
-    pub guild_id: GuildId,
+    pub guild_id: Vec<GuildId>,
     pub query: String,
     pub limit: u32,
 }
@@ -199,7 +176,9 @@ impl GatewayPacket {
                         t == "PRESENCE_UPDATE"
                 => {
                     let ev = GatewayEvent::PresenceUpdate(
-                        PresenceUpdateEvent { user: d.id, malformed: true, ..Default::default() },
+                        PresenceUpdateEvent {
+                            user: d.user, malformed: true, ..Default::default()
+                        },
                     );
                     Ok(GatewayPacket::Dispatch(s, GatewayEventType::PresenceUpdate, Some(ev)))
                 },

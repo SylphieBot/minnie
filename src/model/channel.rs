@@ -31,42 +31,6 @@ pub enum ChannelType {
     Unknown = i32::max_value(),
 }
 
-/// A permission that a user may have.
-#[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
-#[enumset(serialize_repr = "u64")]
-pub enum Permission {
-    CreateInstantInvite = 0,
-    KickMembers = 1,
-    BanMembers = 2,
-    Adminstrator = 3,
-    ManageChannels = 4,
-    ManageGuild = 5,
-    AddReactions = 6,
-    ViewAuditLog = 7,
-    ViewChannel = 10,
-    SendMessages = 11,
-    SendTtsMessages = 12,
-    ManageMessages = 13,
-    EmbedLinks = 14,
-    AttachFiles = 15,
-    ReadMessageHistory = 16,
-    MentionEveryone = 17,
-    UseExternalEmojis = 18,
-    Connect = 20,
-    Speak = 21,
-    MuteMembers = 22,
-    DeafenMembers = 23,
-    MoveMembers = 24,
-    UseVoiceActivity = 25,
-    PrioritySpeaker = 8,
-    Stream = 9,
-    ChangeNickname = 26,
-    ManageNicknames = 27,
-    ManageRoles = 28,
-    ManageWebhooks = 29,
-    ManageEmojis = 30,
-}
-
 /// The type of id in a raw permission overwrite.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "lowercase")]
@@ -77,9 +41,10 @@ enum RawPermissionOverwriteType {
 /// A permission overwrite in a Discord channel, before the id/type fields are properly parsed out.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 struct RawPermissionOverwrite {
+    #[serde(with = "utils::snowflake")]
     id: u64,
     #[serde(rename = "type")]
-    _type: RawPermissionOverwriteType,
+    overwrite_type: RawPermissionOverwriteType,
     allow: EnumSet<Permission>,
     deny: EnumSet<Permission>,
 }
@@ -116,7 +81,7 @@ impl From<PermissionOverwrite> for RawPermissionOverwrite {
     fn from(over: PermissionOverwrite) -> RawPermissionOverwrite  {
         RawPermissionOverwrite {
             id: over.id.raw_id(),
-            _type: over.id.raw_type(),
+            overwrite_type: over.id.raw_type(),
             allow: over.allow,
             deny: over.deny,
         }
@@ -125,7 +90,7 @@ impl From<PermissionOverwrite> for RawPermissionOverwrite {
 impl From<RawPermissionOverwrite> for PermissionOverwrite {
     fn from(over: RawPermissionOverwrite) -> PermissionOverwrite  {
         PermissionOverwrite {
-            id: match over._type {
+            id: match over.overwrite_type {
                 RawPermissionOverwriteType::Member =>
                     PermissionOverwriteId::Member(UserId(over.id)),
                 RawPermissionOverwriteType::Role =>
@@ -154,7 +119,7 @@ impl <'de> Deserialize<'de> for PermissionOverwrite {
 pub struct Channel {
     pub id: CategoryId,
     #[serde(rename = "type")]
-    pub _type: ChannelType,
+    pub channel_type: ChannelType,
     pub guild_id: Option<GuildId>,
     pub position: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -167,39 +132,229 @@ pub struct Channel {
     pub bitrate: Option<u32>,
     pub user_limit: Option<u32>,
     pub rate_limit_per_user: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recipients: Vec<User>,
     pub icon: Option<String>,
     pub owner_id: Option<UserId>,
     pub application_id: Option<ApplicationId>,
     pub parent_id: Option<CategoryId>,
-    pub last_pin_timestamp: DateTime<Utc>,
+    pub last_pin_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct MentionChannel {
+    id: ChannelId,
+    guild_id: ChannelId,
+    #[serde(rename = "type")]
+    channel_type: ChannelType,
+    name: String,
+}
+
+/// Information related to a voice connection state in a Discord guild.
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct Attachment {
+    pub id: AttachmentId,
+    pub filename: String,
+    pub size: u64,
+    pub url: String,
+    pub proxy_url: String,
+    pub height: Option<u64>,
+    pub width: Option<u64>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+pub struct Embed {
+	pub title: Option<String>,
+    #[serde(rename = "type")]
+	pub embed_type: Option<EmbedType>,
+	pub description: Option<String>,
+	pub url: Option<String>,
+	pub timestamp: Option<DateTime<Utc>>,
+	pub color: Option<u32>,
+	pub footer: Option<EmbedFooter>,
+	pub image: Option<EmbedImage>,
+	pub thumbnail: Option<EmbedImage>,
+	pub video: Option<EmbedVideo>,
+	pub provider: Option<EmbedProvider>,
+	pub author: Option<EmbedAuthor>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub fields: Vec<EmbedField>,
+}
+
+/// The type of id in a raw permission overwrite.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum EmbedType {
+	Rich,
+	Image,
+	Video,
+	Link,
+	#[serde(other)]
+	Other,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct EmbedFooter {
+	pub name: String,
+	pub value: Option<String>,
+    #[serde(default, skip_serializing_if = "utils::if_false")]
+	pub inline: bool,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct EmbedImage {
+	pub url: Option<String>,
+	pub proxy_url: Option<String>,
+	pub height: Option<u32>,
+	pub width: Option<u32>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct EmbedVideo {
+	pub url: Option<String>,
+	pub height: Option<u32>,
+	pub width: Option<u32>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct EmbedProvider {
+	pub name: Option<String>,
+	pub url: Option<String>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct EmbedAuthor {
+	pub name: Option<String>,
+	pub url: Option<String>,
+	pub icon_url: Option<String>,
+	pub proxy_icon_url: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct EmbedField {
+	pub name: String,
+	pub value: String,
+    #[serde(default, skip_serializing_if = "utils::if_false")]
+	pub inline: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct Reaction {
+	pub count: u32,
+	pub me: bool,
+	pub emoji: Emoji,
+}
+
+/// The type of a message.
+#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[repr(i32)]
+pub enum MessageType {
+	Default = 0,
+	RecipientAdd = 1,
+	RecipientRemove = 2,
+	Call = 3,
+	ChannelNameChange = 4,
+	ChannelIconChange = 5,
+	ChannelPinnedMessage = 6,
+	GuildMemberJoin = 7,
+	UserPremiumGuildSubscription = 8,
+	UserPremiumGuildSubscriptionTier1 = 9,
+	UserPremiumGuildSubscriptionTier2 = 10,
+	UserPremiumGuildSubscriptionTier3 = 11,
+	ChannelFollowAdd = 12,
+    #[serde(other)]
+    Unknown = i32::max_value(),
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct MessageActivity {
+    #[serde(rename = "type")]
+	pub activity_type: MessageActivityType,
+	pub party_id: Option<String>,
+}
+
+/// The type of a message activity.
+#[derive(Serialize_repr, Deserialize_repr)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[repr(i32)]
+pub enum MessageActivityType {
+	Join = 1,
+	Spectate = 2,
+	Listen = 3,
+    #[serde(other)]
+    Unknown = i32::max_value(),
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct MessageApplication {
+	id: ApplicationId,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	cover_image: Option<String>,
+	description: String,
+	icon: Option<String>,
+	name: String,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct MessageReference {
+	pub message_id: Option<MessageId>,
+	pub channel_id: ChannelId,
+	pub guild_id: Option<GuildId>,
+}
+
+/// A message flag.
+#[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
+pub enum MessageFlag {
+    Crossposted = 0,
+    IsCrosspost = 1,
+    SuppressEmbeds = 2,
 }
 
 /// Information related to a message in a Discord channel.
-#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 pub struct Message {
-	id: MessageId,
-	channel_id: ChannelId,
-	guild_id: Option<GuildId>,
-	author: User,
-	// TODO: member field
-	content: String,
-	timestamp: DateTime<Utc>,
-	edited_timestamp: Option<DateTime<Utc>>,
-	tts: bool,
-	mention_everyone: bool,
-	// TODO: mentions
-	mention_roles: Vec<RoleId>,
-	// TODO: attachments
-	// TODO: embeds
-	// TODO: reactions
-	// TODO: nonce
-	pinned: bool,
-	webhook_id: Option<WebhookId>,
-	// TODO: type
-	// TODO: activity
-	// TODO: application
-	// TODO: message_reference
-	// TODO: flags
+	pub id: MessageId,
+	pub channel_id: ChannelId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guild_id: Option<GuildId>,
+	pub author: User,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member: Option<MemberInfo>,
+	pub content: String,
+	pub timestamp: DateTime<Utc>,
+	pub edited_timestamp: Option<DateTime<Utc>>,
+	pub tts: bool,
+	pub mention_everyone: bool,
+    pub mentions: Vec<MentionUser>,
+	pub mention_roles: Vec<RoleId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mention_channels: Vec<MentionChannel>,
+    pub attachments: Vec<Attachment>,
+	pub embeds: Vec<Embed>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reactions: Vec<Reaction>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "utils::snowflake_opt")]
+    pub nonce: Option<u64>,
+	pub pinned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+	pub webhook_id: Option<WebhookId>,
+    #[serde(rename = "type")]
+    pub message_type: MessageType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity: Option<MessageActivityType>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub application: Option<MessageApplication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+	pub message_reference: Option<MessageReference>,
+    #[serde(default, skip_serializing_if = "EnumSet::is_empty")]
+    pub flags: EnumSet<MessageFlag>,
 }

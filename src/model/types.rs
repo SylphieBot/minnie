@@ -16,6 +16,42 @@ pub struct RateLimited {
     pub global: bool,
 }
 
+/// A permission that a user may have.
+#[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
+#[enumset(serialize_repr = "u64")]
+pub enum Permission {
+    CreateInstantInvite = 0,
+    KickMembers = 1,
+    BanMembers = 2,
+    Adminstrator = 3,
+    ManageChannels = 4,
+    ManageGuild = 5,
+    AddReactions = 6,
+    ViewAuditLog = 7,
+    ViewChannel = 10,
+    SendMessages = 11,
+    SendTtsMessages = 12,
+    ManageMessages = 13,
+    EmbedLinks = 14,
+    AttachFiles = 15,
+    ReadMessageHistory = 16,
+    MentionEveryone = 17,
+    UseExternalEmojis = 18,
+    Connect = 20,
+    Speak = 21,
+    MuteMembers = 22,
+    DeafenMembers = 23,
+    MoveMembers = 24,
+    UseVoiceActivity = 25,
+    PrioritySpeaker = 8,
+    Stream = 9,
+    ChangeNickname = 26,
+    ManageNicknames = 27,
+    ManageRoles = 28,
+    ManageWebhooks = 29,
+    ManageEmojis = 30,
+}
+
 /// A struct representing a Discord token.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
@@ -67,42 +103,52 @@ impl fmt::Debug for SessionId {
 /// An application ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct ApplicationId(#[serde(with = "utils::id_str")] pub u64);
+pub struct ApplicationId(#[serde(with = "utils::snowflake")] pub u64);
+
+/// An attachment ID.
+#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct AttachmentId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// A category ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct CategoryId(#[serde(with = "utils::id_str")] pub u64);
+pub struct CategoryId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// A channel ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct ChannelId(#[serde(with = "utils::id_str")] pub u64);
+pub struct ChannelId(#[serde(with = "utils::snowflake")] pub u64);
+
+/// An emoji ID.
+#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct EmojiId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// A guild ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct GuildId(#[serde(with = "utils::id_str")] pub u64);
+pub struct GuildId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// A message ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct MessageId(#[serde(with = "utils::id_str")] pub u64);
+pub struct MessageId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// A role ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct RoleId(#[serde(with = "utils::id_str")] pub u64);
+pub struct RoleId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// An user ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct UserId(#[serde(with = "utils::id_str")] pub u64);
+pub struct UserId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// A webhook ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
-pub struct WebhookId(#[serde(with = "utils::id_str")] pub u64);
+pub struct WebhookId(#[serde(with = "utils::snowflake")] pub u64);
 
 /// Identifies a shard.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

@@ -136,13 +136,109 @@ pub struct ChannelUpdateEvent(pub Channel);
 #[serde(transparent)]
 pub struct ChannelDeleteEvent(pub Channel);
 
+/// A `Guild Create` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct GuildCreateEvent(pub Guild);
+
+/// A `Guild Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct GuildUpdateEvent(pub Guild);
+
+/// A `Guild Delete` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct GuildDeleteEvent(pub UnavailableGuild);
+
+/// A `Guild Ban Add` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildBanAddEvent {
+    pub guild_id: GuildId,
+    pub user: User,
+}
+
+/// A `Guild Ban Remove` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildBanRemoveEvent {
+    pub guild_id: GuildId,
+    pub user: User,
+}
+
+/// A `Guild Emojis Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildEmojisUpdateEvent {
+    pub guild_id: GuildId,
+    pub emojis: Vec<Emoji>,
+}
+
+/// A `Guild Integrations Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildIntegrationsUpdateEvent {
+    pub guild_id: GuildId,
+}
+
+/// A `Guild Member Add` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildMemberAddEvent {
+    pub guild_id: GuildId,
+    #[serde(flatten)]
+    pub member: Member,
+}
+
+/// A `Guild Member Remove` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildMemberRemoveEvent {
+    pub guild_id: GuildId,
+    pub user: User,
+}
+
+/// A `Guild Member Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildMemberUpdateEvent {
+    pub guild_id: GuildId,
+    pub roles: Vec<RoleId>,
+    pub user: User,
+    pub nick: String,
+}
+
+/// A `Guild Member Chunk` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildMembersChunkEvent {
+    pub guild_id: GuildId,
+    pub member: Vec<Member>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub not_found: Vec<GuildId>,
+}
+
+/// A `Guild Role Create` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildRoleCreateEvent {
+    pub guild_id: GuildId,
+    pub role: Role,
+}
+
+/// A `Guild Role Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildRoleUpdateEvent {
+    pub guild_id: GuildId,
+    pub role: Role,
+}
+
+/// A `Guild Role Delete` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GuildRoleDeleteEvent {
+    pub guild_id: GuildId,
+    pub role_id: RoleId,
+}
+
 /// A `Channel Pins Update` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ChannelPinsUpdateEvent {
-    guild_id: Option<GuildId>,
-    channel_id: ChannelId,
-    last_pin_timestamp: DateTime<Utc>,
+    pub guild_id: Option<GuildId>,
+    pub channel_id: ChannelId,
+    pub last_pin_timestamp: DateTime<Utc>,
 }
 
 /// A `Message Create` event.
@@ -150,12 +246,90 @@ pub struct ChannelPinsUpdateEvent {
 #[serde(transparent)]
 pub struct MessageCreateEvent(pub Message);
 
+/// A `Message Update` event.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MessageUpdateEvent {
+    pub id: MessageId,
+    pub channel_id: ChannelId,
+	pub guild_id: Option<GuildId>,
+	pub author: User, // TODO: Is this always present in message updates?
+    pub member: Option<MemberInfo>,
+	pub content: Option<String>,
+	pub timestamp: Option<DateTime<Utc>>,
+	pub edited_timestamp: Option<DateTime<Utc>>,
+	pub tts: Option<bool>,
+	pub mention_everyone: Option<bool>,
+    pub mentions: Option<Vec<MentionUser>>,
+	pub mention_roles: Option<Vec<RoleId>>,
+    pub mention_channels: Option<Vec<MentionChannel>>,
+    pub attachments: Option<Vec<Attachment>>,
+	pub embeds: Option<Vec<Embed>>,
+    pub reactions: Option<Vec<Reaction>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "utils::snowflake_opt")]
+    pub nonce: Option<u64>,
+	pub pinned: Option<bool>,
+	pub webhook_id: Option<WebhookId>,
+    #[serde(rename = "type")]
+    pub message_type: Option<MessageType>,
+    pub activity: Option<MessageActivityType>,
+    pub application: Option<MessageApplication>,
+	pub message_reference: Option<MessageReference>,
+    pub flags: Option<EnumSet<MessageFlag>>,
+}
+
+/// A `Message Delete` event.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MessageDeleteEvent {
+    pub id: MessageId,
+    pub channel_id: ChannelId,
+    pub guild_id: Option<GuildId>,
+}
+
+/// A `Message Delete Bulk` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MessageDeleteBulkEvent {
+    pub ids: Vec<MessageId>,
+    pub channel_id: ChannelId,
+    pub guild_id: Option<GuildId>,
+}
+
+/// A `Message Reaction Add` event.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MessageReactionAddEvent {
+    pub user_id: UserId,
+    pub channel_id: ChannelId,
+    pub message_id: MessageId,
+    pub guild_id: Option<GuildId>,
+    pub emoji: Emoji,
+}
+
+/// A `Message Reaction Remove` event.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MessageReactionRemoveEvent {
+    pub user_id: UserId,
+    pub channel_id: ChannelId,
+    pub message_id: MessageId,
+    pub guild_id: Option<GuildId>,
+    pub emoji: Emoji,
+}
+
+/// A `Message Reaction All` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct MessageReactionRemoveAllEvent {
+    pub channel_id: ChannelId,
+    pub message_id: MessageId,
+    pub guild_id: Option<GuildId>,
+}
+
 /// A `Presence Update` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PresenceUpdateEvent {
-    #[serde(with = "utils::id_only_user")]
-    pub user: UserId,
+    pub user: PartialUser,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub roles: Vec<RoleId>,
     pub game: Option<Activity>,
@@ -165,16 +339,15 @@ pub struct PresenceUpdateEvent {
     pub activites: Vec<Activity>,
     pub client_status: Option<ClientStatus>,
 
-    #[serde(default, skip_serializing_if = "utils::if_false")]
+    #[serde(default, skip_serializing_if = "utils::if_false", rename = "$malformed")]
     /// This field is set to true if this `Presence Update` packet could not be parsed.
     pub malformed: bool,
 }
 
 /// A `Presence Update` event that failed to parse.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub(crate) struct MalformedPresenceUpdateEvent {
-    #[serde(with = "utils::id_only_user")]
-    pub id: UserId,
+    pub user: PartialUser,
 }
 
 /// A `Ready` event.
@@ -190,6 +363,42 @@ pub struct ReadyEvent {
     pub shard: Option<ShardId>,
 }
 
+/// A `Typing Start` event.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct TypingStartEvent {
+    pub channel_id: ChannelId,
+    pub guild_id: Option<GuildId>,
+    pub user_id: UserId,
+    #[serde(with = "utils::system_time_secs")]
+    pub timestamp: SystemTime,
+}
+
+/// A `User Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct UserUpdateEvent(pub User);
+
+/// A `Voice State Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct VoiceStateUpdateEvent(pub VoiceState);
+
+/// A `Voice Server Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct VoiceServerUpdateEvent {
+    pub token: String,
+    pub guild_id: GuildId,
+    pub endpoint: String,
+}
+
+/// A `Webhooks Update` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct WebhooksUpdateEvent {
+    pub guild_id: GuildId,
+    pub channel_id: ChannelId,
+}
+
 /// An enum representing any gateway event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -198,35 +407,35 @@ pub enum GatewayEvent {
     ChannelUpdate(ChannelUpdateEvent),
     ChannelDelete(ChannelDeleteEvent),
     ChannelPinsUpdate(ChannelPinsUpdateEvent),
-    GuildCreate,
-    GuildUpdate,
-    GuildDelete,
-    GuildBanAdd,
-    GuildBanRemove,
-    GuildEmojisUpdate,
-    GuildIntegrationsUpdate,
-    GuildMemberAdd,
-    GuildMemberRemove,
-    GuildMemberUpdate,
-    GuildMembersChunk,
-    GuildRoleCreate,
-    GuildRoleUpdate,
-    GuildRoleDelete,
+    GuildCreate(GuildCreateEvent),
+    GuildUpdate(GuildUpdateEvent),
+    GuildDelete(GuildDeleteEvent),
+    GuildBanAdd(GuildBanAddEvent),
+    GuildBanRemove(GuildBanRemoveEvent),
+    GuildEmojisUpdate(GuildEmojisUpdateEvent),
+    GuildIntegrationsUpdate(GuildIntegrationsUpdateEvent),
+    GuildMemberAdd(GuildMemberAddEvent),
+    GuildMemberRemove(GuildMemberRemoveEvent),
+    GuildMemberUpdate(GuildMemberUpdateEvent),
+    GuildMembersChunk(GuildMembersChunkEvent),
+    GuildRoleCreate(GuildRoleCreateEvent),
+    GuildRoleUpdate(GuildRoleUpdateEvent),
+    GuildRoleDelete(GuildRoleDeleteEvent),
     MessageCreate(MessageCreateEvent),
-    MessageUpdate,
-    MessageDelete,
-    MessageDeleteBulk,
-    MessageReactionAdd,
-    MessageReactionRemove,
-    MessageReactionRemoveAll,
+    MessageUpdate(MessageUpdateEvent),
+    MessageDelete(MessageDeleteEvent),
+    MessageDeleteBulk(MessageDeleteBulkEvent),
+    MessageReactionAdd(MessageReactionAddEvent),
+    MessageReactionRemove(MessageReactionRemoveEvent),
+    MessageReactionRemoveAll(MessageReactionRemoveAllEvent),
     PresenceUpdate(PresenceUpdateEvent),
     Ready(ReadyEvent),
     Resumed,
-    TypingStart,
-    UserUpdate,
-    VoiceStateUpdate,
-    VoiceServerUpdate,
-    WebhooksUpdate,
+    TypingStart(TypingStartEvent),
+    UserUpdate(UserUpdateEvent),
+    VoiceStateUpdate(VoiceStateUpdateEvent),
+    VoiceServerUpdate(VoiceServerUpdateEvent),
+    WebhooksUpdate(WebhooksUpdateEvent),
 }
 
 /// An enum representing the type of event that occurred.
