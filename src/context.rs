@@ -1,4 +1,5 @@
 use crate::errors::*;
+use crate::gateway::GatewayController;
 use crate::http::RateLimits;
 use crate::model::event::UserStatus;
 use crate::model::gateway::PacketStatusUpdate;
@@ -27,6 +28,8 @@ pub(crate) struct DiscordContextData {
     pub current_presence: RwLock<PacketStatusUpdate>,
     #[derivative(Debug="ignore")]
     pub rustls_connector: TlsConnector,
+    #[derivative(Debug="ignore")]
+    pub gateway: GatewayController,
 }
 
 const DEFAULT_USER_AGENT: &str =
@@ -42,6 +45,10 @@ impl DiscordContext {
     }
     pub fn builder(client_token: DiscordToken) -> DiscordContextBuilder {
         DiscordContextBuilder::new(client_token)
+    }
+
+    pub fn gateway(&self) -> &GatewayController {
+        &self.data.gateway
     }
 
     /// Returns an ID for this context. Guaranteed to be process unique, as long as no more than
@@ -111,7 +118,9 @@ impl DiscordContextBuilder {
                 status: UserStatus::Online,
                 afk: false,
             }),
+            gateway: GatewayController::new(),
         });
+        data.gateway.set_ctx(DiscordContext { data: data.clone() });
         Ok(DiscordContext { data })
     }
 }

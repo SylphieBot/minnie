@@ -8,8 +8,10 @@ use crossbeam_channel::{self, Receiver, Sender};
 use failure::Fail;
 use futures::{pin_mut, poll};
 use futures::compat::*;
+use futures::lock::{Mutex as FutMutex};
 use futures::prelude::*;
 use futures::task::{Poll, Spawn, SpawnExt};
+use parking_lot::RwLock;
 use std::fmt::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -127,7 +129,7 @@ impl <T: GatewayHandler> GatewayError<T> {
 #[derive(Copy, Clone, Debug)]
 /// How a gateway should respond to a specific error condition.
 pub enum GatewayResponse {
-    /// Disconnect from the gateway.
+    /// Disconnect from the gateway, and shut down all other shards.
     Shutdown,
     /// Disconnect and then reconnect to the gateway. If the connection fails to be completely
     /// established, a delay with exponential backoff will be introduced to the process.
@@ -236,7 +238,10 @@ pub enum CompressionType {
 
 /// Stores settings for a gateway.
 #[derive(Copy, Clone, Debug)]
-pub struct GatewaySettings {
+pub struct GatewayConfig {
+    /// The number of shards to connect with. Uses the count suggested by Discord if `None`.
+    pub shard_count: Option<u32>,
+
     /// The type of compression used.
     pub compress: CompressionType,
 
@@ -252,9 +257,10 @@ pub struct GatewaySettings {
     /// Make struct non-exhaustive
     _priv: ()
 }
-impl Default for GatewaySettings {
+impl Default for GatewayConfig {
     fn default() -> Self {
-        GatewaySettings {
+        GatewayConfig {
+            shard_count: None,
             compress: CompressionType::TransportCompression,
             backoff_initial: Duration::from_secs(1),
             backoff_factor: 2.0,
@@ -266,26 +272,17 @@ impl Default for GatewaySettings {
 }
 
 struct GatewayState {
+    is_shutdown: AtomicBool,
     gateway_url: Url,
-    config: GatewaySettings,
-}
-impl GatewayState {
-    fn url(&self) -> Url {
-        let mut url = self.gateway_url.clone();
-        let full_path = format!("v=6&encoding=json{}",
-                                if self.config.compress == CompressionType::TransportCompression {
-                                    "&compress=zlib-stream"
-                                } else {
-                                    ""
-                                });
-        url.set_query(Some(&full_path));
-        url
-    }
+    config: GatewayConfig,
+    shards: Vec<Arc<ShardState>>,
 }
 
 enum ShardSignal {
     SendPresenceUpdate,
-    Disconnect,
+    SendRequestGuildMembers(PacketRequestGuildMembers),
+    Shutdown,
+    Reconnect,
 }
 struct ShardState {
     id: ShardId,
@@ -305,12 +302,6 @@ impl ShardSession {
             *seq_ref = seq;
         }
     }
-    fn is_active(&self) -> bool {
-        match self {
-            ShardSession::Resume(..) => true,
-            ShardSession::Inactive => false,
-        }
-    }
     fn sequence_id(&self) -> Option<PacketSequenceID> {
         match self {
             ShardSession::Resume(_, seq) => Some(*seq),
@@ -320,6 +311,7 @@ impl ShardSession {
 }
 
 enum ShardStatus {
+    Disconnect,
     Shutdown,
     Reconnect,
     ReconnectWithBackoff,
@@ -382,7 +374,7 @@ async fn running_shard(
     }
 
     // Connect to the gateway
-    let url = gateway.url();
+    let url = gateway.gateway_url.clone();
     let compress = gateway.config.compress == CompressionType::TransportCompression;
     let mut conn = match WebsocketConnection::connect_wss(ctx, url, compress).await {
         Ok(v) => v,
@@ -497,19 +489,34 @@ async fn running_shard(
 
         // Check the signal channel.
         let mut do_disconnect = false;
+        let mut do_reconnect = false;
         let mut do_presence_update = false;
+        let mut packets = Vec::new();
         while let Ok(sig) = state.recv.try_recv() {
             match sig {
-                ShardSignal::SendPresenceUpdate => do_presence_update = true,
-                ShardSignal::Disconnect => do_disconnect = true,
+                ShardSignal::SendPresenceUpdate =>
+                    do_presence_update = true,
+                ShardSignal::SendRequestGuildMembers(packet) =>
+                    packets.push(GatewayPacket::RequestGuildMembers(packet)),
+                ShardSignal::Shutdown =>
+                    do_disconnect = true,
+                ShardSignal::Reconnect =>
+                    do_reconnect = true,
             }
         }
-        if do_disconnect {
+        if do_disconnect || do_reconnect {
             *session = ShardSession::Inactive;
-            return ShardStatus::Shutdown
+            if do_disconnect {
+                return ShardStatus::Disconnect
+            } else {
+                return ShardStatus::Reconnect
+            }
         }
         if do_presence_update {
             send!(GatewayPacket::StatusUpdate(ctx.data.current_presence.read().clone()));
+        }
+        for packet in packets {
+            send!(packet);
         }
 
         // Check various timers.
@@ -547,7 +554,11 @@ async fn shard_main_loop(
         ).await;
         state.is_connected.store(false, Ordering::Relaxed);
         match result {
-            ShardStatus::Shutdown => return,
+            ShardStatus::Disconnect => return,
+            ShardStatus::Shutdown => {
+                // TODO: disconnect gateway
+                return;
+            },
             ShardStatus::Reconnect => {
                 reconnect_delay = gateway.config.backoff_initial
             },
@@ -568,39 +579,124 @@ async fn shard_main_loop(
 /// Spawns a shard handler into a future executor.
 fn start_shard(
     ctx: DiscordContext,
+    state: Arc<ShardState>,
     gateway: Arc<GatewayState>,
-    id: ShardId,
     executor: &mut impl Spawn,
     dispatch: Arc<impl GatewayHandler>,
-) -> Arc<ShardState> {
-    let (send, recv) = crossbeam_channel::unbounded();
-    let state = Arc::new(ShardState {
-        id, send, recv,
-        shard_alive: AtomicBool::new(true),
-        is_connected: AtomicBool::new(false),
-    });
-    let mut local_state = state.clone();
+) {
     executor.spawn(async move {
         if let Err(e) = Error::catch_panic_async(async {
-            shard_main_loop(&ctx, &gateway, &local_state, &*dispatch).await;
+            shard_main_loop(&ctx, &gateway, &state, &*dispatch).await;
+            state.shard_alive.store(false, Ordering::SeqCst);
             Ok(())
         }).await {
-            dispatch.report_error(&ctx, id, GatewayError::Panicked(e));
+            dispatch.report_error(&ctx, state.id, GatewayError::Panicked(e));
         }
     }).expect("Could not spawn future into given executor.");
-    state
 }
 
-pub async fn test_gateway(
-    ctx: DiscordContext,
-    id: ShardId,
-    executor: &mut impl Spawn,
-    dispatch: impl GatewayHandler,
-) {
-    let gateway_bot = ctx.routes().get_gateway_bot().await.unwrap();
-    let gateway = Arc::new(GatewayState {
-        gateway_url: Url::parse(&gateway_bot.url).unwrap(),
-        config: Default::default(),
-    });
-    start_shard(ctx, gateway, id, executor, Arc::new(dispatch));
+/// Handles connecting and disconnecting to the Discord gateway.
+pub struct GatewayController {
+    ctx: RwLock<Option<DiscordContext>>,
+    state: FutMutex<Option<Arc<GatewayState>>>,
+}
+impl GatewayController {
+    pub(crate) fn new() -> GatewayController {
+        GatewayController {
+            ctx: RwLock::new(None),
+            state: FutMutex::new(None),
+        }
+    }
+
+    pub(crate) fn set_ctx(&self, ctx: DiscordContext) {
+        (*self.ctx.write()) = Some(ctx);
+    }
+    fn ctx(&self) -> DiscordContext {
+        self.ctx.read().as_ref().unwrap().clone()
+    }
+
+    async fn get_gateway_ref(&self) -> Option<Arc<GatewayState>> {
+        (*self.state.lock().await).clone()
+    }
+    async fn disconnect_current(&self, state: &mut Option<Arc<GatewayState>>) {
+        if state.is_some() {
+            let mut gateway = state.take().unwrap();
+            gateway.is_shutdown.store(true, Ordering::SeqCst);
+            for shard in &gateway.shards {
+                shard.send.send(ShardSignal::Shutdown).expect("Failed to send Shutdown signal.");
+            }
+            loop {
+                Delay::new(Instant::now() + Duration::from_millis(100)).compat().await.ok();
+                if gateway.shards.iter().all(|x| x.shard_alive.load(Ordering::SeqCst)) {
+                    return
+                }
+            }
+        }
+    }
+    async fn connect_current(
+        &self,
+        state: &mut Option<Arc<GatewayState>>, config: GatewayConfig,
+        executor: &mut impl Spawn, dispatch: impl GatewayHandler,
+    ) -> Result<()> {
+        let dispatch = Arc::new(dispatch);
+        if state.is_some() {
+            self.disconnect_current(state).await;
+        }
+
+        let ctx = self.ctx();
+        let gateway_bot = ctx.routes().get_gateway_bot().await?;
+        let shard_count = match config.shard_count {
+            Some(count) => count,
+            None => gateway_bot.shards,
+        };
+
+        let mut gateway_url = Url::parse(&gateway_bot.url).expect("Could not parse gateway URL.");
+        let full_path = format!("v=6&encoding=json{}",
+                                if config.compress == CompressionType::TransportCompression {
+                                    "&compress=zlib-stream"
+                                } else {
+                                    ""
+                                });
+        gateway_url.set_query(Some(&full_path));
+
+        let mut shards = Vec::new();
+        for id in 0..shard_count {
+            let id = ShardId(id, shard_count);
+            let (send, recv) = crossbeam_channel::unbounded();
+            shards.push(Arc::new(ShardState {
+                id, send, recv,
+                shard_alive: AtomicBool::new(true),
+                is_connected: AtomicBool::new(false),
+            }))
+        }
+        let gateway_state = Arc::new(GatewayState {
+            is_shutdown: AtomicBool::new(false),
+            gateway_url, config, shards,
+        });
+        *state = Some(gateway_state.clone());
+        for shard in &gateway_state.shards {
+            start_shard(
+                ctx.clone(), shard.clone(), gateway_state.clone(), executor, dispatch.clone(),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Connects the bot to the Discord gateway. If the bot is already connected, it disconnects
+    /// the previous connection.
+    pub async fn connect(
+        &self, config: GatewayConfig, executor: &mut impl Spawn, dispatch: impl GatewayHandler,
+    ) -> Result<()> {
+        let mut state = self.state.lock().await;
+        self.connect_current(&mut *state, config, executor, dispatch).await?;
+        Ok(())
+    }
+
+    /// Disconnects the bot from the Discord gateway.
+    pub async fn disconnect(&self) -> Result<()> {
+        let mut state = self.state.lock().await;
+        self.disconnect_current(&mut state).await;
+        Ok(())
+    }
 }

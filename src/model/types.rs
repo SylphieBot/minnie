@@ -100,13 +100,12 @@ impl fmt::Debug for DiscordToken {
 pub struct Snowflake(#[serde(with = "utils::snowflake")] pub u64);
 impl fmt::Debug for Snowflake {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("#")?;
         fmt::Display::fmt(&self.0, f)
     }
 }
 impl fmt::Display for Snowflake {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self, f)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 impl Snowflake {
