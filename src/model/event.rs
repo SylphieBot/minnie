@@ -209,6 +209,7 @@ pub struct GuildMembersChunkEvent {
     pub member: Vec<Member>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub not_found: Vec<GuildId>,
+    pub presences: Vec<Presence>
 }
 
 /// A `Guild Role Create` event.
@@ -324,30 +325,16 @@ pub struct MessageReactionRemoveAllEvent {
     pub guild_id: Option<GuildId>,
 }
 
-/// A `Presence Update` event.
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct PresenceUpdateEvent {
-    pub user: PartialUser,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub roles: Vec<RoleId>,
-    pub game: Option<Activity>,
-    pub guild_id: Option<GuildId>,
-    pub status: Option<UserStatus>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub activites: Vec<Activity>,
-    pub client_status: Option<ClientStatus>,
-
-    #[serde(default, skip_serializing_if = "utils::if_false", rename = "$malformed")]
-    /// This field is set to true if this `Presence Update` packet could not be parsed.
-    pub malformed: bool,
-}
-
 /// A `Presence Update` event that failed to parse.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub(crate) struct MalformedPresenceUpdateEvent {
     pub user: PartialUser,
 }
+
+/// A `Presence Update` event.
+#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct PresenceUpdateEvent(pub Presence);
 
 /// A `Ready` event.
 #[serde_with::skip_serializing_none]

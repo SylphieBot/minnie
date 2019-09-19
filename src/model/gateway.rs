@@ -2,6 +2,7 @@
 
 use crate::errors::*;
 use crate::model::event::*;
+use crate::model::guild::*;
 use crate::model::types::*;
 use crate::serde::*;
 use std::fmt;
@@ -64,11 +65,15 @@ pub struct PacketResume {
 }
 
 /// The contents of the `Request Guild Members` packet.
+#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketRequestGuildMembers {
     pub guild_id: Vec<GuildId>,
     pub query: String,
     pub limit: u32,
+    #[serde(default, skip_serializing_if = "utils::if_false")]
+    pub presences: bool,
+    pub user_ids: Option<Vec<UserId>>,
 }
 
 /// The contents of the `Hello` packet.
@@ -176,9 +181,9 @@ impl GatewayPacket {
                         t == "PRESENCE_UPDATE"
                 => {
                     let ev = GatewayEvent::PresenceUpdate(
-                        PresenceUpdateEvent {
+                        PresenceUpdateEvent(Presence {
                             user: d.user, malformed: true, ..Default::default()
-                        },
+                        }),
                     );
                     Ok(GatewayPacket::Dispatch(s, GatewayEventType::PresenceUpdate, Some(ev)))
                 },

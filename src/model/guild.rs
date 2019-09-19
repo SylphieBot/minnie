@@ -181,6 +181,25 @@ pub struct VoiceState {
     pub suppress: bool,
 }
 
+/// A user presence.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct Presence {
+    pub user: PartialUser,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<RoleId>,
+    pub game: Option<Activity>,
+    pub guild_id: Option<GuildId>,
+    pub status: Option<UserStatus>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activites: Vec<Activity>,
+    pub client_status: Option<ClientStatus>,
+
+    #[serde(default, skip_serializing_if = "utils::if_false", rename = "$malformed")]
+    /// This field is set to true if this `Presence Update` packet could not be parsed.
+    pub malformed: bool,
+}
+
 /// Information related to a role in a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 pub struct Guild {
@@ -228,7 +247,7 @@ pub struct Guild {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<Channel>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub presences: Vec<PresenceUpdateEvent>,
+    pub presences: Vec<Presence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_presences: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
