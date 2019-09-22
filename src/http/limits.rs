@@ -1,22 +1,34 @@
 use crate::errors::*;
-use crate::model::types::RateLimited;
+use crate::model::types::Snowflake;
+use crate::serde::*;
 use futures::compat::*;
 use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
-use serde::de::DeserializeOwned;
+use std::any::{Any, TypeId};
 use std::cmp::{max, min};
 use std::collections::HashMap;
+use std::fmt;
 use std::future::Future;
 use std::hash::Hash;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{SystemTime, Duration, UNIX_EPOCH, Instant};
 use reqwest::StatusCode;
 use reqwest::r#async::{Response, RequestBuilder};
 use reqwest::header::*;
 use tokio::timer::Delay;
+use failure::_core::fmt::Debug;
 
 // TODO: Add support for garbage collecting old channels and guilds.
 // TODO: Add error contexts.
-// TODO: Do something with X-RateLimit-Bucket
+
+/// A struct representing a rate limited API call.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+struct RateLimited {
+    pub message: String,
+    #[serde(with = "utils::duration_millis")]
+    pub retry_after: Duration,
+    pub global: bool,
+}
 
 /// Stores information about a particular rate limit.
 #[derive(Debug)]
@@ -107,9 +119,8 @@ async fn check_global_wait(global_limit: &GlobalLimit) -> bool {
         false
     }
 }
-fn check_route_wait(mut lock: MappedMutexGuard<RawRateLimit>) -> impl Future<Output = bool> {
+fn check_route_wait(lock: &mut RawRateLimit) -> impl Future<Output = bool> {
     let time = lock.check_wait_until();
-    drop(lock);
     async move {
         if let Some(time) = time {
             debug!("Waiting for preexisting route rate limit until {:?}", time);
@@ -121,9 +132,11 @@ fn check_route_wait(mut lock: MappedMutexGuard<RawRateLimit>) -> impl Future<Out
     }
 }
 
+#[derive(Debug)]
 struct RateLimitHeaders {
     limit: u32, remaining: u32,
     resets_at: SystemTime, resets_at_instant: Instant, resets_in: Duration,
+    bucket: String,
 }
 fn parse_header<T: FromStr>(
     headers: &HeaderMap, name: &'static str,
@@ -148,10 +161,11 @@ fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
     let remaining   = parse_header::<u32>(headers, "X-RateLimit-Remaining")?;
     let reset       = parse_header::<f64>(headers, "X-RateLimit-Reset")?;
     let reset_after = parse_header::<f64>(headers, "X-RateLimit-Reset-After")?;
+    let bucket      = headers.get("X-RateLimit-Bucket");
     let any_limit   = limit.is_some() || remaining.is_some() || reset.is_some() ||
-                      reset_after.is_some();
+                      reset_after.is_some() || bucket.is_some();
     let all_limit   = limit.is_some() && remaining.is_some() && reset.is_some() &&
-                      reset_after.is_some();
+                      reset_after.is_some() && bucket.is_some();
 
     if global {
         if any_limit {
@@ -169,12 +183,14 @@ fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
             resets_at: UNIX_EPOCH + Duration::from_secs_f64(reset.unwrap()),
             resets_at_instant: now + resets_in,
             resets_in,
+            bucket: bucket.unwrap().to_str()?.to_string(),
         }))
     } else {
         Ok(None)
     }
 }
 
+#[derive(Debug)]
 enum ResponseStatus {
     Success(Option<RateLimitHeaders>, Response),
     RateLimited(Option<RateLimitHeaders>, Duration),
@@ -200,11 +216,6 @@ async fn check_response(request: RequestBuilder) -> Result<ResponseStatus> {
     }
 }
 
-fn push_rate_info(mut lock: MappedMutexGuard<RawRateLimit>, headers: Option<RateLimitHeaders>) {
-    if let Some(headers) = headers {
-        lock.push_rate_limit(headers)
-    }
-}
 fn push_global_rate_limit(global_limit: &GlobalLimit, target: Instant) {
     let mut lock = global_limit.lock();
     if lock.is_none() || lock.unwrap() < target {
@@ -212,60 +223,98 @@ fn push_global_rate_limit(global_limit: &GlobalLimit, target: Instant) {
     }
 }
 
-async fn perform_rate_limited<'a, T: DeserializeOwned>(
-    global_limit: &GlobalLimit,
-    lock_raw_limit: impl Fn() -> MappedMutexGuard<'a, RawRateLimit> + 'a,
-    make_request: impl Fn() -> RequestBuilder,
-) -> Result<T> {
-    loop {
+#[derive(Default, Debug)]
+pub struct RateLimitStore(
+    Mutex<HashMap<String, Arc<Mutex<HashMap<Snowflake, RawRateLimit>>>>>,
+);
+impl RateLimitStore {
+    fn get_bucket(&self, bucket: String) -> Arc<Mutex<HashMap<Snowflake, RawRateLimit>>> {
+        let mut buckets = self.0.lock();
+        buckets.entry(bucket).or_insert_with(
+            || Arc::new(Mutex::new(HashMap::new()))
+        ).clone()
+    }
+}
+
+#[derive(Default)]
+pub struct RateLimitRoute {
+    bucket: Mutex<String>, // for debugging purposes
+    data: Mutex<Option<Arc<Mutex<HashMap<Snowflake, RawRateLimit>>>>>,
+}
+impl RateLimitRoute {
+    pub fn new() -> Self {
+        RateLimitRoute {
+            bucket: Mutex::new("<unknown>".to_string()),
+            data: Mutex::new(None),
+        }
+    }
+
+    async fn check_wait(&self, global_limit: &GlobalLimit, id: Snowflake) {
         loop {
             if check_global_wait(global_limit).await { continue }
-            let fut = check_route_wait(lock_raw_limit());
-            if fut.await { continue }
+            let fut = self.data.lock().as_ref().map(|routes| {
+                check_route_wait(routes.lock().entry(id).or_insert(RawRateLimit::NoLimitAvailable))
+            });
+            if let Some(fut) = fut {
+                if fut.await { continue }
+            }
             break
         }
-        match check_response(make_request()).await? {
-            ResponseStatus::Success(rate_limit, mut response) => {
-                push_rate_info(lock_raw_limit(), rate_limit);
-                return Ok(response.json::<T>().compat().await?)
+    }
+    fn push_rate_info(
+        &self,
+        limits: Option<RateLimitHeaders>,
+        store: &RateLimitStore,
+        id: Snowflake,
+    ) {
+        if let Some(limits) = limits {
+            let mut data = self.data.lock();
+            if data.is_none() {
+                *data = Some(store.get_bucket(limits.bucket.clone()));
+                *self.bucket.lock() = limits.bucket.clone();
             }
-            ResponseStatus::RateLimited(rate_limit, wait_duration) => {
-                push_rate_info(lock_raw_limit(), rate_limit);
-                wait_until(Instant::now() + wait_duration).await;
-            }
-            ResponseStatus::GloballyRateLimited(wait_duration) => {
-                let time = Instant::now() + wait_duration;
-                push_global_rate_limit(global_limit, time);
-                wait_until(time).await;
+            let mut routes = data.as_ref().unwrap().lock();
+            let mut limit = routes.entry(id).or_insert(RawRateLimit::NoLimitAvailable);
+            limit.push_rate_limit(limits);
+        }
+    }
+
+    pub async fn perform_rate_limited<T: DeserializeOwned>(
+        &self,
+        global_limit: &GlobalLimit,
+        store: &RateLimitStore,
+        make_request: impl Fn() -> RequestBuilder,
+        id: Snowflake,
+    ) -> Result<T> {
+        loop {
+            self.check_wait(global_limit, id).await;
+            match dbg!(check_response(make_request()).await?) {
+                ResponseStatus::Success(rate_limit, mut response) => {
+                    self.push_rate_info(rate_limit, store, id);
+                    return Ok(response.json::<T>().compat().await?)
+                }
+                ResponseStatus::RateLimited(rate_limit, wait_duration) => {
+                    self.push_rate_info(rate_limit, store, id);
+                    wait_until(Instant::now() + wait_duration).await;
+                }
+                ResponseStatus::GloballyRateLimited(wait_duration) => {
+                    let time = Instant::now() + wait_duration;
+                    push_global_rate_limit(global_limit, time);
+                    wait_until(time).await;
+                }
             }
         }
     }
 }
-
-#[derive(Default, Debug)]
-pub struct RateLimit(Mutex<RawRateLimit>);
-impl RateLimit {
-    pub fn perform_rate_limited<'a, T: DeserializeOwned + 'a>(
-        &'a self, global_limit: &'a GlobalLimit,
-        make_request: impl Fn() -> RequestBuilder + 'a,
-    ) -> impl Future<Output = Result<T>> + 'a {
-        perform_rate_limited(global_limit, move || {
-            MutexGuard::map(self.0.lock(), |x| x)
-        }, make_request)
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct RateLimitSet<K: Eq + Hash + Copy>(Mutex<HashMap<K, RawRateLimit>>);
-impl <K: Eq + Hash + Copy> RateLimitSet<K> {
-    pub fn perform_rate_limited<'a, T: DeserializeOwned + 'a>(
-        &'a self, global_limit: &'a GlobalLimit,
-        make_request: impl Fn() -> RequestBuilder + 'a, k: K,
-    ) -> impl Future<Output = Result<T>> + 'a {
-        perform_rate_limited(global_limit, move || {
-            MutexGuard::map(self.0.lock(), |x|
-                x.entry(k).or_insert_with(|| RawRateLimit::default())
-            )
-        }, make_request)
+impl fmt::Debug for RateLimitRoute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let lock = self.bucket.lock();
+        f.write_str("RateLimit(")?;
+        if lock.is_empty() {
+            f.write_str("<none>")?;
+        } else {
+            lock.fmt(f)?;
+        }
+        f.write_str(")")
     }
 }

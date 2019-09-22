@@ -11,15 +11,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use twox_hash::{XxHash, XxHash64};
 
-/// A struct representing a rate limited API call.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct RateLimited {
-    pub message: String,
-    #[serde(with = "utils::duration_millis")]
-    pub retry_after: Duration,
-    pub global: bool,
-}
-
 /// A permission that a user may have.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
 #[enumset(serialize_repr = "u64")]
@@ -179,6 +170,16 @@ impl Snowflake {
         self.0 as u16 & 0xFFF
     }
 }
+impl From<u64> for Snowflake {
+    fn from(i: u64) -> Self {
+        Snowflake(i)
+    }
+}
+impl From<Snowflake> for u64 {
+    fn from(i: Snowflake) -> Self {
+        i.0
+    }
+}
 
 /// A session ID for resuming sessions.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -239,6 +240,36 @@ pub struct UserId(pub Snowflake);
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
 pub struct WebhookId(pub Snowflake);
+
+macro_rules! id_structs {
+    ($($name:ident)*) => {$(
+        impl From<Snowflake> for $name {
+            fn from(s: Snowflake) -> $name {
+                $name(s)
+            }
+        }
+        impl From<$name> for Snowflake {
+            fn from(id: $name) -> Snowflake {
+                id.0
+            }
+        }
+        impl From<u64> for $name {
+            fn from(s: u64) -> $name {
+                $name(s.into())
+            }
+        }
+        impl From<$name> for u64 {
+            fn from(id: $name) -> u64 {
+                id.0.into()
+            }
+        }
+    )*};
+}
+
+id_structs! {
+    ApplicationId AttachmentId CategoryId ChannelId EmojiId GuildId MessageId RoleId
+    UserId WebhookId
+}
 
 /// Identifies a shard.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

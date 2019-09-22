@@ -6,14 +6,15 @@ use std::future::Future;
 mod limits;
 mod model;
 
-use self::limits::{GlobalLimit, RateLimit, RateLimitSet};
+use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
 pub use self::model::*;
 
 #[derive(Default, Debug)]
 pub(crate) struct RateLimits {
     global_limit: GlobalLimit,
-    get_gateway: RateLimit,
-    get_gateway_bot: RateLimit,
+    buckets_store: RateLimitStore,
+    get_gateway: RateLimitRoute,
+    get_gateway_bot: RateLimitRoute,
 }
 
 #[derive(Copy, Clone)]
@@ -35,7 +36,7 @@ macro_rules! route {
 macro_rules! routes {
     (<$lt:lifetime> $(
         route $name:ident($($param:ident: $param_ty:ty),* $(,)?) -> $ty:ty {
-            rate_limit: |$rate_limit_match:pat| $rate_limit:expr,
+            rate_limit: |$rate_limit_match:pat| ($rate_limit:expr, $rate_limit_val:expr),
             make_request: |$make_request_match:pat| $make_request:expr $(,)?
         }
     )*) => {$(
@@ -45,10 +46,12 @@ macro_rules! routes {
             let $rate_limit_match = &self.0.data.rate_limits;
             $rate_limit.perform_rate_limited(
                 &self.0.data.rate_limits.global_limit,
+                &self.0.data.rate_limits.buckets_store,
                 move || {
                     let $make_request_match = &self.0.data.http_client;
                     $make_request
-                }
+                },
+                $rate_limit_val.into(),
             )
         }
     )*}
@@ -56,11 +59,11 @@ macro_rules! routes {
 impl <'a> Routes<'a> {
     routes! { <'a>
         route get_gateway() -> GetGateway {
-            rate_limit  : |l| &l.get_gateway,
+            rate_limit  : |l| (&l.get_gateway, 0),
             make_request: |r| r.get(route!("/gateway"))
         }
         route get_gateway_bot() -> GetGatewayBot {
-            rate_limit  : |l| &l.get_gateway_bot,
+            rate_limit  : |l| (&l.get_gateway_bot, 0),
             make_request: |r| r.get(route!("/gateway/bot"))
         }
     }
