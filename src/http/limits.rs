@@ -274,24 +274,24 @@ impl RateLimitRoute {
                 *self.bucket.lock() = limits.bucket.clone();
             }
             let mut routes = data.as_ref().unwrap().lock();
-            let mut limit = routes.entry(id).or_insert(RawRateLimit::NoLimitAvailable);
+            let limit = routes.entry(id).or_insert(RawRateLimit::NoLimitAvailable);
             limit.push_rate_limit(limits);
         }
     }
 
-    pub async fn perform_rate_limited<T: DeserializeOwned>(
+    pub async fn perform_rate_limited(
         &self,
         global_limit: &GlobalLimit,
         store: &RateLimitStore,
-        make_request: impl Fn() -> RequestBuilder,
+        make_request: impl Fn() -> Result<RequestBuilder>,
         id: Snowflake,
-    ) -> Result<T> {
+    ) -> Result<Response> {
         loop {
             self.check_wait(global_limit, id).await;
-            match dbg!(check_response(make_request()).await?) {
-                ResponseStatus::Success(rate_limit, mut response) => {
+            match dbg!(check_response(make_request()?).await?) {
+                ResponseStatus::Success(rate_limit, response) => {
                     self.push_rate_info(rate_limit, store, id);
-                    return Ok(response.json::<T>().compat().await?)
+                    return Ok(response)
                 }
                 ResponseStatus::RateLimited(rate_limit, wait_duration) => {
                     self.push_rate_info(rate_limit, store, id);

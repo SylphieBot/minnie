@@ -34,7 +34,7 @@ pub enum ChannelType {
 /// The type of id in a raw permission overwrite.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "lowercase")]
-enum RawPermissionOverwriteType {
+pub(crate) enum RawPermissionOverwriteType {
     Role, Member,
 }
 
@@ -60,11 +60,26 @@ impl PermissionOverwriteId {
             PermissionOverwriteId::Role(id) => id.0,
         }
     }
-    fn raw_type(self) -> RawPermissionOverwriteType {
+    pub(crate) fn raw_type(self) -> RawPermissionOverwriteType {
         match self {
             PermissionOverwriteId::Member(_) => RawPermissionOverwriteType::Member,
             PermissionOverwriteId::Role(_) => RawPermissionOverwriteType::Role,
         }
+    }
+}
+impl From<PermissionOverwriteId> for Snowflake {
+    fn from(id: PermissionOverwriteId) -> Self {
+        id.raw_id()
+    }
+}
+impl From<UserId> for PermissionOverwriteId {
+    fn from(id: UserId) -> Self {
+        PermissionOverwriteId::Member(id)
+    }
+}
+impl From<RoleId> for PermissionOverwriteId {
+    fn from(id: RoleId) -> Self {
+        PermissionOverwriteId::Role(id)
     }
 }
 

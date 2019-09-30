@@ -15,7 +15,7 @@ derivative = "1.0.2"
 enumset = { version = "0.4.0", features = ["serde", "nightly"] }
 failure = "0.1.5"
 futures01 = { package = "futures", version = "0.1.21", features = ["nightly"] }
-futures-preview = { version = "0.3.0-alpha.18", features = ["compat", "io-compat", "nightly", "async-await"] }
+futures-preview = { version = "=0.3.0-alpha.19", features = ["compat", "io-compat", "async-await"] }
 flate2 = { version = "1.0.7", default-features = false, features = ["rust_backend"] }
 lazy_static = "1.4.0"
 log = "0.4.6"
