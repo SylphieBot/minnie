@@ -8,8 +8,7 @@ use std::net::ToSocketAddrs;
 use std::time::{Instant, Duration};
 use tokio::net::TcpStream;
 use tokio::timer::timeout::{Timeout, Error as TimeoutError};
-use tokio_rustls::TlsStream;
-use tokio_rustls::rustls::ClientSession;
+use tokio_rustls::client::TlsStream;
 use tokio_rustls::webpki::DNSNameRef;
 use url::*;
 use websocket::{OwnedMessage, ClientBuilder};
@@ -17,7 +16,7 @@ use websocket::r#async::MessageCodec;
 use websocket::client::r#async::Framed;
 use serde::de::DeserializeOwned;
 
-type RustlsWebsocket = Framed<TlsStream<TcpStream, ClientSession>, MessageCodec<OwnedMessage>>;
+type RustlsWebsocket = Framed<TlsStream<TcpStream>, MessageCodec<OwnedMessage>>;
 async fn connect_ws_rustls(ctx: &DiscordContext, mut url: Url) -> Result<RustlsWebsocket> {
     ensure!(url.scheme() == "wss", DiscordBadResponse, "Discord requested non-secure websocket.");
     debug!("Connecting to websocket at {}", url);
