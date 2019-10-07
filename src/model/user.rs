@@ -3,7 +3,8 @@ use crate::model::types::*;
 use crate::serde::*;
 
 /// A struct representing a Discord user. Returned by most events involving users.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct User {
     pub id: UserId,
     pub username: String,
@@ -15,7 +16,8 @@ pub struct User {
 
 /// A struct representing a Discord user with additional member information. Used as part of
 /// [`Message`]s returned by certain events.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MentionUser {
     #[serde(flatten)]
     pub user: User,
@@ -24,7 +26,8 @@ pub struct MentionUser {
 
 /// A struct representing a partial Discord user. Exists in [`Presence Update`] events.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct PartialUser {
     pub id: UserId,
     pub username: Option<String>,
@@ -35,7 +38,7 @@ pub struct PartialUser {
 
 /// A struct representing a full Discord user. Returned only by the `/users/@me` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct FullUser {
     #[serde(flatten)]
     pub user: User,
@@ -52,6 +55,7 @@ pub struct FullUser {
 /// Represents the flags for a particular user.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
 #[enumset(serialize_repr = "u64")]
+#[non_exhaustive]
 pub enum UserFlags {
     DiscordEmployee = 0,
     DiscordPartner = 1,
@@ -68,6 +72,7 @@ pub enum UserFlags {
 #[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum UserPremiumType {
     NitroClassic = 1,
     Nitro = 2,

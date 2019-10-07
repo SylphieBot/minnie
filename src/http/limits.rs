@@ -23,10 +23,10 @@ use failure::_core::fmt::Debug;
 /// A struct representing a rate limited API call.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 struct RateLimited {
-    pub message: String,
+    message: String,
     #[serde(with = "utils::duration_millis")]
-    pub retry_after: Duration,
-    pub global: bool,
+    retry_after: Duration,
+    global: bool,
 }
 
 /// Stores information about a particular rate limit.

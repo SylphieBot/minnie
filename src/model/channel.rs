@@ -10,6 +10,7 @@ use crate::serde::*;
 /// The type of an channel.
 #[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 #[repr(i32)]
 pub enum ChannelType {
     /// A normal text channel in a guild.
@@ -130,6 +131,7 @@ impl <'de> Deserialize<'de> for PermissionOverwrite {
 /// Information related to a Discord channel.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct Channel {
     pub id: CategoryId,
     #[serde(rename = "type")]
@@ -156,16 +158,18 @@ pub struct Channel {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MentionChannel {
-    id: ChannelId,
-    guild_id: ChannelId,
+    pub id: ChannelId,
+    pub guild_id: ChannelId,
     #[serde(rename = "type")]
-    channel_type: ChannelType,
-    name: String,
+    pub channel_type: ChannelType,
+    pub name: String,
 }
 
 /// Information related to a voice connection state in a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct Attachment {
     pub id: AttachmentId,
     pub filename: String,
@@ -178,6 +182,7 @@ pub struct Attachment {
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct Embed {
 	pub title: Option<String>,
     #[serde(rename = "type")]
@@ -199,6 +204,7 @@ pub struct Embed {
 /// The type of id in a raw permission overwrite.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum EmbedType {
 	Rich,
 	Image,
@@ -209,7 +215,8 @@ pub enum EmbedType {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct EmbedFooter {
 	pub name: String,
 	pub value: Option<String>,
@@ -218,7 +225,8 @@ pub struct EmbedFooter {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct EmbedImage {
 	pub url: Option<String>,
 	pub proxy_url: Option<String>,
@@ -227,7 +235,8 @@ pub struct EmbedImage {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct EmbedVideo {
 	pub url: Option<String>,
 	pub height: Option<u32>,
@@ -235,14 +244,16 @@ pub struct EmbedVideo {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct EmbedProvider {
 	pub name: Option<String>,
 	pub url: Option<String>,
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct EmbedAuthor {
 	pub name: Option<String>,
 	pub url: Option<String>,
@@ -250,7 +261,8 @@ pub struct EmbedAuthor {
 	pub proxy_icon_url: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[non_exhaustive]
 pub struct EmbedField {
 	pub name: String,
 	pub value: String,
@@ -259,6 +271,7 @@ pub struct EmbedField {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct Reaction {
 	pub count: u32,
 	pub me: bool,
@@ -269,6 +282,7 @@ pub struct Reaction {
 #[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum MessageType {
 	Default = 0,
 	RecipientAdd = 1,
@@ -289,6 +303,7 @@ pub enum MessageType {
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageActivity {
     #[serde(rename = "type")]
 	pub activity_type: MessageActivityType,
@@ -299,6 +314,7 @@ pub struct MessageActivity {
 #[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum MessageActivityType {
 	Join = 1,
 	Spectate = 2,
@@ -308,17 +324,19 @@ pub enum MessageActivityType {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageApplication {
-	id: ApplicationId,
+	pub id: ApplicationId,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	cover_image: Option<String>,
-	description: String,
-	icon: Option<String>,
-	name: String,
+	pub cover_image: Option<String>,
+	pub description: String,
+	pub icon: Option<String>,
+	pub name: String,
 }
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageReference {
 	pub message_id: Option<MessageId>,
 	pub channel_id: ChannelId,
@@ -327,6 +345,7 @@ pub struct MessageReference {
 
 /// A message flag.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
+#[non_exhaustive]
 pub enum MessageFlag {
     Crossposted = 0,
     IsCrosspost = 1,
@@ -335,6 +354,7 @@ pub enum MessageFlag {
 
 /// Information related to a message in a Discord channel.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct Message {
 	pub id: MessageId,
 	pub channel_id: ChannelId,

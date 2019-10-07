@@ -15,6 +15,7 @@ use std::time::SystemTime;
 #[derive(Serialize_repr, Deserialize_repr)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum ActivityType {
     Game = 0,
     Streaming = 1,
@@ -31,6 +32,7 @@ impl Default for ActivityType {
 /// The time periods for which an activity has been going on.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ActivityTimestamps {
     #[serde(default, with = "utils::system_time_millis_opt")]
     pub start: Option<SystemTime>,
@@ -41,6 +43,7 @@ pub struct ActivityTimestamps {
 /// The flags for a particular activity.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
 #[enumset(serialize_repr = "u64")]
+#[non_exhaustive]
 pub enum ActivityFlags {
     Instance = 0,
     Join = 1,
@@ -53,6 +56,7 @@ pub enum ActivityFlags {
 /// The party sizes available for an activity.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ActivityParty {
     pub id: Option<String>,
     pub size: Option<(u32, u32)>,
@@ -61,6 +65,7 @@ pub struct ActivityParty {
 /// The assets used for available for an activity.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ActivityAssets {
     pub large_image: Option<String>,
     pub large_text: Option<String>,
@@ -71,6 +76,7 @@ pub struct ActivityAssets {
 /// The secrets used for an activity.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ActivitySecrets {
     pub join: Option<String>,
     pub spectate: Option<String>,
@@ -81,6 +87,7 @@ pub struct ActivitySecrets {
 /// An activity for user presence updates.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct Activity {
     pub name: String,
     #[serde(rename = "type")]
@@ -101,6 +108,7 @@ pub struct Activity {
 /// The connection status of an user.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename = "lowercase")]
+#[non_exhaustive]
 pub enum UserStatus {
     Online,
     #[serde(rename = "dnd")]
@@ -115,6 +123,7 @@ pub enum UserStatus {
 /// A struct representing the per-platform
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ClientStatus {
     pub desktop: Option<String>,
     pub mobile: Option<String>,
@@ -153,6 +162,7 @@ pub struct GuildDeleteEvent(pub UnavailableGuild);
 
 /// A `Guild Ban Add` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildBanAddEvent {
     pub guild_id: GuildId,
     pub user: User,
@@ -160,6 +170,7 @@ pub struct GuildBanAddEvent {
 
 /// A `Guild Ban Remove` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildBanRemoveEvent {
     pub guild_id: GuildId,
     pub user: User,
@@ -167,6 +178,7 @@ pub struct GuildBanRemoveEvent {
 
 /// A `Guild Emojis Update` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildEmojisUpdateEvent {
     pub guild_id: GuildId,
     pub emojis: Vec<Emoji>,
@@ -174,12 +186,14 @@ pub struct GuildEmojisUpdateEvent {
 
 /// A `Guild Integrations Update` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildIntegrationsUpdateEvent {
     pub guild_id: GuildId,
 }
 
 /// A `Guild Member Add` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildMemberAddEvent {
     pub guild_id: GuildId,
     #[serde(flatten)]
@@ -188,6 +202,7 @@ pub struct GuildMemberAddEvent {
 
 /// A `Guild Member Remove` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildMemberRemoveEvent {
     pub guild_id: GuildId,
     pub user: User,
@@ -195,6 +210,7 @@ pub struct GuildMemberRemoveEvent {
 
 /// A `Guild Member Update` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildMemberUpdateEvent {
     pub guild_id: GuildId,
     pub roles: Vec<RoleId>,
@@ -204,6 +220,7 @@ pub struct GuildMemberUpdateEvent {
 
 /// A `Guild Member Chunk` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildMembersChunkEvent {
     pub guild_id: GuildId,
     pub member: Vec<Member>,
@@ -214,6 +231,7 @@ pub struct GuildMembersChunkEvent {
 
 /// A `Guild Role Create` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildRoleCreateEvent {
     pub guild_id: GuildId,
     pub role: Role,
@@ -221,6 +239,7 @@ pub struct GuildRoleCreateEvent {
 
 /// A `Guild Role Update` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildRoleUpdateEvent {
     pub guild_id: GuildId,
     pub role: Role,
@@ -228,6 +247,7 @@ pub struct GuildRoleUpdateEvent {
 
 /// A `Guild Role Delete` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GuildRoleDeleteEvent {
     pub guild_id: GuildId,
     pub role_id: RoleId,
@@ -236,6 +256,7 @@ pub struct GuildRoleDeleteEvent {
 /// A `Channel Pins Update` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ChannelPinsUpdateEvent {
     pub guild_id: Option<GuildId>,
     pub channel_id: ChannelId,
@@ -250,6 +271,7 @@ pub struct MessageCreateEvent(pub Message);
 /// A `Message Update` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageUpdateEvent {
     pub id: MessageId,
     pub channel_id: ChannelId,
@@ -281,6 +303,7 @@ pub struct MessageUpdateEvent {
 /// A `Message Delete` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageDeleteEvent {
     pub id: MessageId,
     pub channel_id: ChannelId,
@@ -289,6 +312,7 @@ pub struct MessageDeleteEvent {
 
 /// A `Message Delete Bulk` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageDeleteBulkEvent {
     pub ids: Vec<MessageId>,
     pub channel_id: ChannelId,
@@ -298,6 +322,7 @@ pub struct MessageDeleteBulkEvent {
 /// A `Message Reaction Add` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageReactionAddEvent {
     pub user_id: UserId,
     pub channel_id: ChannelId,
@@ -309,6 +334,7 @@ pub struct MessageReactionAddEvent {
 /// A `Message Reaction Remove` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageReactionRemoveEvent {
     pub user_id: UserId,
     pub channel_id: ChannelId,
@@ -319,6 +345,7 @@ pub struct MessageReactionRemoveEvent {
 
 /// A `Message Reaction All` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct MessageReactionRemoveAllEvent {
     pub channel_id: ChannelId,
     pub message_id: MessageId,
@@ -332,13 +359,14 @@ pub(crate) struct MalformedPresenceUpdateEvent {
 }
 
 /// A `Presence Update` event.
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
 pub struct PresenceUpdateEvent(pub Presence);
 
 /// A `Ready` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct ReadyEvent {
     #[serde(rename = "v")]
     pub version: i32,
@@ -352,6 +380,7 @@ pub struct ReadyEvent {
 /// A `Typing Start` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct TypingStartEvent {
     pub channel_id: ChannelId,
     pub guild_id: Option<GuildId>,
@@ -372,6 +401,7 @@ pub struct VoiceStateUpdateEvent(pub VoiceState);
 
 /// A `Voice Server Update` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct VoiceServerUpdateEvent {
     pub token: String,
     pub guild_id: GuildId,
@@ -380,6 +410,7 @@ pub struct VoiceServerUpdateEvent {
 
 /// A `Webhooks Update` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct WebhooksUpdateEvent {
     pub guild_id: GuildId,
     pub channel_id: ChannelId,
@@ -388,6 +419,7 @@ pub struct WebhooksUpdateEvent {
 /// An enum representing any gateway event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[non_exhaustive]
 pub enum GatewayEvent {
     ChannelCreate(ChannelCreateEvent),
     ChannelUpdate(ChannelUpdateEvent),
@@ -428,6 +460,7 @@ pub enum GatewayEvent {
 #[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[derive(EnumString, Display, AsRefStr, IntoStaticStr)]
 #[strum(serialize_all = "shouty_snake_case")]
+#[non_exhaustive]
 pub enum GatewayEventType {
     ChannelCreate,
     ChannelUpdate,

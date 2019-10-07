@@ -8,12 +8,14 @@ use std::time::Duration;
 
 /// The return value of the `Get Gateway` endpoint.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GetGateway {
     pub url: String,
 }
 
 /// The current limits on starting sessions.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct SessionStartLimit {
     pub total: u32,
     pub remaining: u32,
@@ -23,6 +25,7 @@ pub struct SessionStartLimit {
 
 /// The return value of the `Get Gateway Bot` endpoint.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub struct GetGatewayBot {
     pub url: String,
     pub shards: u32,
@@ -31,7 +34,8 @@ pub struct GetGatewayBot {
 
 /// The parameters of the `Modify Channel` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
 pub struct ModifyChannelParams {
     pub name: Option<String>,
     pub position: Option<u32>,
@@ -46,7 +50,8 @@ pub struct ModifyChannelParams {
 
 /// The parameters of the `Get Channel Messages` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
 pub struct GetChannelMessagesParams {
     pub around: Option<MessageId>,
     pub before: Option<MessageId>,
@@ -56,7 +61,8 @@ pub struct GetChannelMessagesParams {
 
 /// The parameters of the `Create Messages` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
 pub struct CreateMessageParams {
     pub content: Option<String>,
     pub nonce: Option<Snowflake>,
@@ -66,7 +72,7 @@ pub struct CreateMessageParams {
 
 /// A file to pass to the `Create Messages` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 pub struct CreateMessageFile {
     pub file_name: Cow<'static, str>,
     pub mime_type: Cow<'static, str>,
@@ -82,7 +88,8 @@ impl CreateMessageFile {
 
 /// The parameters of the `Get Reactions` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
 pub struct GetReactionsParams {
     pub before: Option<UserId>,
     pub after: Option<UserId>,
@@ -91,7 +98,8 @@ pub struct GetReactionsParams {
 
 /// The parameters of the `Edit Message` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
 pub struct EditMessageParams {
     pub content: Option<String>,
     pub embed: Option<Embed>,
@@ -99,7 +107,8 @@ pub struct EditMessageParams {
 
 /// The parameters of the `Edit Channel Permissions` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
 pub struct EditChannelPermissionsParams {
     pub allow: EnumSet<Permission>,
     pub deny: EnumSet<Permission>,

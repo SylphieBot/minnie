@@ -14,6 +14,7 @@ use twox_hash::XxHash64;
 /// A permission that a user may have.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
 #[enumset(serialize_repr = "u64")]
+#[non_exhaustive]
 pub enum Permission {
     CreateInstantInvite = 0,
     KickMembers = 1,

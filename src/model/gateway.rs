@@ -181,7 +181,14 @@ impl GatewayPacket {
                 => {
                     let ev = GatewayEvent::PresenceUpdate(
                         PresenceUpdateEvent(Presence {
-                            user: d.user, malformed: true, ..Default::default()
+                            user: d.user,
+                            roles: Vec::new(),
+                            game: None,
+                            guild_id: None,
+                            status: None,
+                            activites: Vec::new(),
+                            client_status: None,
+                            malformed: true,
                         }),
                     );
                     Ok(GatewayPacket::Dispatch(s, GatewayEventType::PresenceUpdate, Some(ev)))
