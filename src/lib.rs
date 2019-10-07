@@ -1,4 +1,4 @@
-#![feature(nll)]
+#![feature(nll, non_exhaustive)]
 #![deny(unused_must_use)]
 
 #[macro_use] extern crate derivative;
