@@ -2,9 +2,9 @@ use crate::errors::*;
 use crate::model::channel::*;
 use crate::model::types::*;
 use crate::serde::*;
-use reqwest::r#async::multipart::{Form, Part};
+use reqwest::r#async::multipart::Part;
 use std::borrow::Cow;
-use std::time::{SystemTime, Duration};
+use std::time::Duration;
 
 /// The return value of the `Get Gateway` endpoint.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

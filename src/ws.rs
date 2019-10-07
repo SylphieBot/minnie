@@ -2,19 +2,18 @@ use crate::context::DiscordContext;
 use crate::errors::*;
 use futures::compat::*;
 use futures::prelude::*;
-use flate2::{Decompress, Status, FlushDecompress};
+use flate2::{Decompress, FlushDecompress};
 use serde::*;
 use std::net::ToSocketAddrs;
 use std::time::{Instant, Duration};
 use tokio::net::TcpStream;
-use tokio::timer::timeout::{Timeout, Error as TimeoutError};
+use tokio::timer::timeout::Timeout;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::webpki::DNSNameRef;
 use url::*;
 use websocket::{OwnedMessage, ClientBuilder};
 use websocket::r#async::MessageCodec;
 use websocket::client::r#async::Framed;
-use serde::de::DeserializeOwned;
 
 type RustlsWebsocket = Framed<TlsStream<TcpStream>, MessageCodec<OwnedMessage>>;
 async fn connect_ws_rustls(ctx: &DiscordContext, mut url: Url) -> Result<RustlsWebsocket> {
@@ -82,7 +81,7 @@ impl StreamDecoder {
     ) -> Result<(&'i [u8], usize)> {
         let last_total_in = decoder.total_in();
         let last_total_out = decoder.total_out();
-        let result = decoder.decompress(buf, raw_buffer, FlushDecompress::Sync)?;
+        decoder.decompress(buf, raw_buffer, FlushDecompress::Sync)?;
         let output_written = (decoder.total_out() - last_total_out) as usize;
         Ok((&buf[(decoder.total_in() - last_total_in) as usize..], output_written))
     }

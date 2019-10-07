@@ -6,11 +6,9 @@ use crate::model::types::*;
 use crate::ws::*;
 use crossbeam_channel::{self, Receiver, Sender};
 use failure::Fail;
-use futures::{pin_mut, poll};
 use futures::compat::*;
 use futures::lock::{Mutex as FutMutex};
-use futures::prelude::*;
-use futures::task::{Poll, Spawn, SpawnExt};
+use futures::task::{Spawn, SpawnExt};
 use parking_lot::RwLock;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -19,7 +17,6 @@ use std::time::{Duration, Instant};
 use tokio::timer::Delay;
 use url::*;
 use websocket::CloseData;
-use tokio::sync::mpsc::error::UnboundedRecvError;
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
@@ -154,7 +151,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
 
     /// Handle events received by the gateway.
     fn on_event(
-        &self, ctx: &DiscordContext, shard: ShardId, ev: GatewayEvent,
+        &self, _: &DiscordContext, _: ShardId, _: GatewayEvent,
     ) -> StdResult<(), Self::Error> {
         Ok(())
     }
@@ -162,7 +159,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// Called when an error occurs in the gateway. This method should create an error report of
     /// some kind and then return.
     #[inline(never)]
-    fn report_error(&self, ctx: &DiscordContext, shard: ShardId, err: GatewayError<Self>) {
+    fn report_error(&self, _: &DiscordContext, shard: ShardId, err: GatewayError<Self>) {
         let mut buf = err.error_str(shard);
         if let GatewayError::UnexpectedPacket(pkt) = &err {
             write!(buf, ": {:?}", pkt).unwrap();
@@ -220,7 +217,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// and [`GatewayHandler::on_event`] will not be called.
     ///
     /// Returns `false` by default.
-    fn ignores_event(&self, _: &DiscordContext, _: ShardId, pkt: &GatewayEventType) -> bool {
+    fn ignores_event(&self, _: &DiscordContext, _: ShardId, _: &GatewayEventType) -> bool {
         false
     }
 }
@@ -615,12 +612,9 @@ impl GatewayController {
         self.ctx.read().as_ref().unwrap().clone()
     }
 
-    async fn get_gateway_ref(&self) -> Option<Arc<GatewayState>> {
-        (*self.state.lock().await).clone()
-    }
     async fn disconnect_current(&self, state: &mut Option<Arc<GatewayState>>) {
         if state.is_some() {
-            let mut gateway = state.take().unwrap();
+            let gateway = state.take().unwrap();
             gateway.is_shutdown.store(true, Ordering::SeqCst);
             for shard in &gateway.shards {
                 shard.send.send(ShardSignal::Shutdown).expect("Failed to send Shutdown signal.");

@@ -1,7 +1,6 @@
 use failure::*;
 use flate2::DecompressError;
 use futures::FutureExt;
-use parking_lot::Mutex;
 use reqwest::{Error as ReqwestError};
 use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
 use serde_json::{Error as SerdeJsonError};

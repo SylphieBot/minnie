@@ -1,4 +1,3 @@
-use crate::model::channel::*;
 use crate::model::guild::*;
 use crate::model::types::*;
 use crate::serde::*;

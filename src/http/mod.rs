@@ -1,14 +1,12 @@
 use crate::context::DiscordContext;
 use crate::errors::*;
 use crate::model::channel::*;
-use crate::model::gateway::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
 use futures::compat::*;
 use reqwest::r#async::multipart::Form;
 use serde_json;
-use std::future::Future;
 
 mod limits;
 pub mod model;
@@ -54,10 +52,11 @@ macro_rules! routes {
             $($name: RateLimitRoute,)*
         }
 
+        #[allow(unused_parens)]
         impl <'a> Routes<'a> {$(
             $($meta)*
             pub async fn $name(self, $($param: $param_ty,)*) -> Result<($($ty)?)> {
-                #[allow(unused_mut)]
+                #[allow(unused_mut, unused_assignments)]
                 let mut rate_id: Snowflake = Snowflake(0);
                 $(rate_id = $rate_id.into();)?
                 $(let $let_name $(: $let_ty)? = $let_expr;)*

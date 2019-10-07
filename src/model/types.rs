@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use twox_hash::{XxHash, XxHash64};
+use twox_hash::XxHash64;
 
 /// A permission that a user may have.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]

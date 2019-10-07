@@ -7,7 +7,6 @@ use crate::model::types::*;
 use crate::serde::*;
 use std::fmt;
 use std::marker::PhantomData;
-use std::mem::replace;
 use std::time::{SystemTime, Duration};
 
 /// The connection properties used for the `Identify` packet.
@@ -521,12 +520,12 @@ impl <'a, 'de: 'a, A: MapAccess<'de>> VariantAccess<'de> for DeserializeGatewayE
         self.1.next_value_seed(seed)
     }
     fn tuple_variant<V>(
-        self, len: usize, visitor: V,
+        self, _: usize, _: V,
     ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         unimplemented!()
     }
     fn struct_variant<V>(
-        self, _: &'static [&'static str], visitor: V,
+        self, _: &'static [&'static str], _: V,
     ) -> StdResult<V::Value, A::Error> where V: Visitor<'de> {
         unimplemented!()
     }
@@ -720,36 +719,36 @@ impl <S: Serializer> Serializer for SerializeEvent<S> {
         self.1.end()
     }
     fn serialize_seq(
-        self, len: Option<usize>,
+        self, _: Option<usize>,
     ) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }
-    fn serialize_tuple(self, len: usize) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
+    fn serialize_tuple(self, _: usize) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }
     fn serialize_tuple_struct(
-        self, name: &'static str, len: usize,
+        self, _: &'static str, _: usize,
     ) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }
 
     fn serialize_tuple_variant(
-        self, name: &'static str, variant_index: u32, variant: &'static str, len: usize,
+        self, _: &'static str, _: u32, _: &'static str, _: usize,
     ) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }
     fn serialize_map(
-        self, len: Option<usize>,
+        self, _: Option<usize>,
     ) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }
     fn serialize_struct(
-        self, name: &'static str, len: usize,
+        self, _: &'static str, _: usize,
     ) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }
     fn serialize_struct_variant(
-        self, name: &'static str, variant_index: u32, variant: &'static str, len: usize,
+        self, _: &'static str, _: u32, _: &'static str, _: usize,
     ) -> StdResult<Impossible<S::Ok, S::Error>, S::Error> {
         Err(S::Error::custom("must call serialize_newtype_variant or serialize_unit_variant"))
     }

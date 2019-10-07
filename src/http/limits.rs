@@ -2,9 +2,8 @@ use crate::errors::*;
 use crate::model::types::Snowflake;
 use crate::serde::*;
 use futures::compat::*;
-use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
-use std::any::{Any, TypeId};
-use std::cmp::{max, min};
+use parking_lot::Mutex;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt;
 use std::future::Future;
@@ -242,13 +241,6 @@ pub struct RateLimitRoute {
     data: Mutex<Option<Arc<Mutex<HashMap<Snowflake, RawRateLimit>>>>>,
 }
 impl RateLimitRoute {
-    pub fn new() -> Self {
-        RateLimitRoute {
-            bucket: Mutex::new("<unknown>".to_string()),
-            data: Mutex::new(None),
-        }
-    }
-
     async fn check_wait(&self, global_limit: &GlobalLimit, id: Snowflake) {
         loop {
             if check_global_wait(global_limit).await { continue }
