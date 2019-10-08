@@ -13,8 +13,7 @@ pub mod model;
 mod serde;
 mod ws;
 
+/// A set of reexports for more conveniently using the library.
 pub mod prelude {
-    pub use crate::context::{DiscordContext, DiscordContextBuilder};
-    pub use crate::errors::{Error, ErrorKind, Result as MinnieResult};
-    pub use crate::http::Routes;
+    pub use crate::context::DiscordContext;
 }

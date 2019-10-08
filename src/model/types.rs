@@ -1,4 +1,4 @@
-//! A crate containing basic types common to all API calls.
+//! Basic types common to all API calls.
 
 use crate::errors::*;
 use crate::serde::*;
@@ -133,9 +133,12 @@ impl Snowflake {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
         let id = std::thread::current().id();
-        let mut hasher = XxHash64::with_seed(*PROCESS_ID as u64);
+        let mut hasher = XxHash64::default();
+        PROCESS_ID.hash(&mut hasher);
         id.hash(&mut hasher);
         let thread_hash = hasher.finish();
+        let hash_a = thread_hash as u8 & 0x1F;
+        let hash_b = (thread_hash >> 5) as u8 & 0x1F;
 
         let time = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(duration) => duration.as_millis() as u64 & 0x3FFFFFFFFFF,
@@ -143,7 +146,7 @@ impl Snowflake {
         };
         let ctr = COUNTER.fetch_add(1, Ordering::Relaxed);
 
-        Self::from_parts(time, thread_hash as u8 & 0x1F, *PROCESS_ID as u8 & 0x1F, ctr as u16)
+        Self::from_parts(time, hash_a, hash_b, ctr as u16)
     }
 
     /// Retrieves the raw timestamp component of this snowflake.

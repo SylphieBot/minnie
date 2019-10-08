@@ -1,21 +1,25 @@
 use crate::errors::*;
 use crate::gateway::{GatewayController, GatewayConfig, PresenceUpdate};
 use crate::http::RateLimits;
-use crate::model::types::DiscordToken;
+use crate::model::types::{DiscordToken, Snowflake};
+use crate::serde::*;
 use reqwest::r#async::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::borrow::Cow;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::ClientConfig;
 
-static CURRENT_CTX_ID: AtomicUsize = AtomicUsize::new(0);
+/// An ID that uniquely represents a Discord context.
+#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct DiscordContextId(pub Snowflake);
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct DiscordContextData {
-    pub context_id: usize,
+    pub context_id: DiscordContextId,
+    pub unique_context_id: DiscordContextId,
     pub library_name: Cow<'static, str>,
     pub http_user_agent: Cow<'static, str>,
     pub client_token: DiscordToken,
@@ -46,15 +50,21 @@ impl DiscordContext {
         &self.data.gateway
     }
 
-    /// Returns an ID for this context. Guaranteed to be process unique, as long as no more than
-    /// `usize::max_value()` contexts are ever created.
-    pub fn id(&self) -> usize {
+    /// Returns an ID for this context. Used to distinguish one Discord context from another.
+    pub fn id(&self) -> DiscordContextId {
         self.data.context_id
+    }
+
+    /// Returns an unique ID for this context. Unlike [`DiscordContext::id`], this should be
+    /// to be entirely unique in normal usage, as it cannot be manually set.
+    pub fn unique_id(&self) -> DiscordContextId {
+        self.data.unique_context_id
     }
 }
 
 #[derive(Debug)]
 pub struct DiscordContextBuilder {
+    context_id: Option<DiscordContextId>,
     library_name: Option<String>,
     http_user_agent: Option<String>,
     client_token: DiscordToken,
@@ -64,12 +74,18 @@ pub struct DiscordContextBuilder {
 impl DiscordContextBuilder {
     pub fn new(client_token: DiscordToken) -> Self {
         DiscordContextBuilder {
+            context_id: None,
             library_name: None,
             http_user_agent: None,
             client_token,
             default_presence: PresenceUpdate::default(),
             gateway_config: GatewayConfig::default(),
         }
+    }
+
+    pub fn with_context_id(mut self, id: DiscordContextId) -> Self {
+        self.context_id = Some(id);
+        self
     }
 
     pub fn with_library_name(mut self, library_name: impl ToString) -> Self {
@@ -93,6 +109,10 @@ impl DiscordContextBuilder {
     }
 
     pub fn build(self) -> Result<DiscordContext> {
+        let context_id = match self.context_id {
+            Some(id) => id,
+            None => DiscordContextId(Snowflake::random()),
+        };
         let library_name: Cow<str> = match self.library_name {
             Some(lib) => lib.into(),
             None => "minnie".into(),
@@ -115,7 +135,8 @@ impl DiscordContextBuilder {
         rustls_config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
 
         let data = Arc::new(DiscordContextData {
-            context_id: CURRENT_CTX_ID.fetch_add(0, Ordering::Relaxed),
+            context_id,
+            unique_context_id: DiscordContextId(Snowflake::random()),
             library_name, http_user_agent,
             client_token: self.client_token,
             http_client,

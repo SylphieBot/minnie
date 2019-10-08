@@ -1,3 +1,5 @@
+//! A module for making raw requests to Discord's API.
+
 use crate::context::DiscordContext;
 use crate::errors::*;
 use crate::model::channel::*;
@@ -9,10 +11,10 @@ use reqwest::r#async::multipart::Form;
 use serde_json;
 
 mod limits;
-pub mod model;
+mod model;
 
 use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
-use self::model::*;
+pub use self::model::*;
 
 #[derive(Default, Debug)]
 pub(crate) struct RateLimits {
@@ -21,6 +23,9 @@ pub(crate) struct RateLimits {
     routes: RouteRateLimits,
 }
 
+/// Makes raw requests to Discord's API and handles rate limiting.
+///
+/// Instances can be obtained by calling [`DiscordContext::routes`].
 #[derive(Copy, Clone)]
 pub struct Routes<'a>(&'a DiscordContext);
 impl DiscordContext {

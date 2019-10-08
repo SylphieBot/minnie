@@ -1,4 +1,4 @@
-//! Types related to Discord channels.
+//! Types related to Discord channels and messages.
 
 use chrono::{DateTime, Utc};
 use crate::errors::*;

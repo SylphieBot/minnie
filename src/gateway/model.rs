@@ -2,8 +2,8 @@
 
 use crate::errors::*;
 use crate::model::event::*;
-use crate::model::guild::*;
 use crate::model::types::*;
+use crate::model::user::*;
 use crate::serde::*;
 use std::fmt;
 use std::marker::PhantomData;

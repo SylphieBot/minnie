@@ -27,9 +27,11 @@ pub use model::{GuildMembersRequest, PresenceUpdate};
 // TODO: Consider adding builders for presence updates/gateway config.
 // TODO: Add a way to get gateway status.
 // TODO: Add tests.
+// TODO: Allow a gateway to only connect certain shards for bot scaling.
 
+/// Passed to an [`GatewayHandler`] what type of error occurred.
 #[derive(Debug)]
-/// The type of error reported to an [`EventDispatch`].
+#[non_exhaustive]
 pub enum GatewayError<T: GatewayHandler> {
     /// The gateway failed to authenticate.
     ///
@@ -66,7 +68,7 @@ pub enum GatewayError<T: GatewayHandler> {
     WebsocketSendError(Error),
     /// The gateway received a packet it was not prepared to handle.
     UnexpectedPacket(GatewayPacket),
-    /// The error occurred in the [`EventDispatch`] itself.
+    /// The error occurred in the [`GatewayHandler`] itself.
     EventHandlingFailed(T::Error),
     /// The event handler panicked.
     EventHandlingPanicked(Error),
@@ -127,8 +129,9 @@ impl <T: GatewayHandler> GatewayError<T> {
     }
 }
 
+/// Returned by [`GatewayHandler`] to indicate how the gateway should respond to an error condition.
 #[derive(Copy, Clone, Debug)]
-/// How a gateway should respond to a specific error condition.
+#[non_exhaustive]
 pub enum GatewayResponse {
     /// Disconnect from the gateway, and shut down all other shards.
     Shutdown,
@@ -138,6 +141,18 @@ pub enum GatewayResponse {
     /// Attempt to ignore the error. This is not possible for all error statuses, and may cause
     /// the gateway to reconnect instead.
     Ignore,
+}
+
+/// Passed to a [`GatewayHandler`] to indicate the context in which an event was generated.
+///
+/// This struct can be cloned to obtain a `'static` version if needed.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct GatewayContext {
+    /// The Discord context in which the event was generated.
+    pub ctx: DiscordContext,
+    /// The shard in which the event was generated.
+    pub shard_id: ShardId,
 }
 
 /// Handles events dispatched to a gateway.
@@ -155,7 +170,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
 
     /// Handle events received by the gateway.
     fn on_event(
-        &self, _: &DiscordContext, _: ShardId, _: GatewayEvent,
+        &self, _: &GatewayContext, _: GatewayEvent,
     ) -> StdResult<(), Self::Error> {
         Ok(())
     }
@@ -163,8 +178,8 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// Called when an error occurs in the gateway. This method should create an error report of
     /// some kind and then return.
     #[inline(never)]
-    fn report_error(&self, _: &DiscordContext, shard: ShardId, err: GatewayError<Self>) {
-        let mut buf = err.error_str(shard);
+    fn report_error(&self, ctx: &GatewayContext, err: GatewayError<Self>) {
+        let mut buf = err.error_str(ctx.shard_id);
         if let GatewayError::UnexpectedPacket(pkt) = &err {
             write!(buf, ": {:?}", pkt).unwrap();
         }
@@ -188,7 +203,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// unknown events.
     #[inline(never)]
     fn on_error(
-        &self, _: &DiscordContext, _: ShardId, err: &GatewayError<Self>,
+        &self, _: &GatewayContext, err: &GatewayError<Self>,
     ) -> GatewayResponse {
         match err {
             GatewayError::UnexpectedPacket(_) => GatewayResponse::Ignore,
@@ -206,7 +221,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// likely recur on an `Resume` attempt.
     #[inline(never)]
     fn can_resume(
-        &self, _: &DiscordContext, _: ShardId, err: &GatewayError<Self>,
+        &self, _: &GatewayContext, err: &GatewayError<Self>,
     ) -> bool {
         match err {
             GatewayError::PacketParseFailed(_) => false,
@@ -221,7 +236,7 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// and [`GatewayHandler::on_event`] will not be called.
     ///
     /// Returns `false` by default.
-    fn ignores_event(&self, _: &DiscordContext, _: ShardId, _: &GatewayEventType) -> bool {
+    fn ignores_event(&self, _: &GatewayContext, _: &GatewayEventType) -> bool {
         false
     }
 }
@@ -350,6 +365,7 @@ enum ShardPhase {
 /// A future running a single connection to a shard.
 async fn running_shard(
     ctx: &DiscordContext,
+    gateway_ctx: &GatewayContext,
     config: GatewayConfig,
     gateway: &GatewayState,
     state: &ShardState,
@@ -363,7 +379,7 @@ async fn running_shard(
     let mut conn_successful = false;
     macro_rules! emit_err {
         (@check_end_sess $err:ident) => {
-            if !dispatch.can_resume(ctx, state.id, &$err) {
+            if !dispatch.can_resume(gateway_ctx, &$err) {
                 *session = ShardSession::Inactive;
             }
         };
@@ -376,8 +392,8 @@ async fn running_shard(
         }};
         (@emit $error:expr, $ignore_case:expr $(,)?) => {{
             let err = $error;
-            let response = dispatch.on_error(ctx, state.id, &err);
-            dispatch.report_error(ctx, state.id, err);
+            let response = dispatch.on_error(gateway_ctx, &err);
+            dispatch.report_error(gateway_ctx, err);
             match response {
                 GatewayResponse::Shutdown => return ShardStatus::Shutdown,
                 GatewayResponse::Ignore => $ignore_case,
@@ -415,7 +431,7 @@ async fn running_shard(
         // Try to read a packet from the gateway for one second, before processing other tasks.
         let mut need_connect = false;
         match conn.receive(|s| GatewayPacket::from_json(s, |t|
-            dispatch.ignores_event(ctx, state.id, t)
+            dispatch.ignores_event(gateway_ctx, t)
         ), Duration::from_secs(1)).await {
             Ok(Some(GatewayPacket::Hello(packet))) if conn_phase == Initial => {
                 heartbeat_interval = packet.heartbeat_interval;
@@ -442,7 +458,7 @@ async fn running_shard(
                     } else {
                         session.set_sequence_id(seq);
                     }
-                    match Error::catch_panic(|| Ok(dispatch.on_event(ctx, state.id, data))) {
+                    match Error::catch_panic(|| Ok(dispatch.on_event(gateway_ctx, data))) {
                         Ok(Err(e)) => emit_err!(GatewayError::EventHandlingFailed(e), true),
                         Err(e) => emit_err!(GatewayError::EventHandlingPanicked(e), true),
                         _ => { }
@@ -558,6 +574,7 @@ async fn running_shard(
 /// A future running a particular shard ID, particularly handling reconnection.
 async fn shard_main_loop(
     ctx: &DiscordContext,
+    gateway_ctx: &GatewayContext,
     gateway: &GatewayState,
     state: &ShardState,
     dispatch: &impl GatewayHandler,
@@ -567,7 +584,7 @@ async fn shard_main_loop(
     loop {
         let config = gateway.shared.config.read().clone();
         let result = running_shard(
-            &ctx, config, gateway, state, &mut session, dispatch,
+            &ctx, &gateway_ctx, config, gateway, state, &mut session, dispatch,
         ).await;
         state.is_connected.store(false, Ordering::Relaxed);
 
@@ -604,12 +621,16 @@ fn start_shard(
     dispatch: Arc<impl GatewayHandler>,
 ) {
     executor.spawn(async move {
+        let gateway_ctx = GatewayContext {
+            ctx: ctx.clone(),
+            shard_id: state.id,
+        };
         if let Err(e) = Error::catch_panic_async(async {
-            shard_main_loop(&ctx, &gateway, &state, &*dispatch).await;
+            shard_main_loop(&ctx, &gateway_ctx, &gateway, &state, &*dispatch).await;
             state.shard_alive.store(false, Ordering::SeqCst);
             Ok(())
         }).await {
-            dispatch.report_error(&ctx, state.id, GatewayError::Panicked(e));
+            dispatch.report_error(&gateway_ctx, GatewayError::Panicked(e));
         }
     }).expect("Could not spawn future into given executor.");
 }

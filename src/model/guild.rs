@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc};
 use crate::model::channel::*;
-use crate::model::event::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
@@ -194,26 +193,6 @@ pub struct VoiceState {
     pub self_mute: bool,
     pub self_stream: bool,
     pub suppress: bool,
-}
-
-/// A user presence.
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[non_exhaustive]
-pub struct Presence {
-    pub user: PartialUser,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub roles: Vec<RoleId>,
-    pub game: Option<Activity>,
-    pub guild_id: Option<GuildId>,
-    pub status: Option<UserStatus>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub activites: Vec<Activity>,
-    pub client_status: Option<ClientStatus>,
-
-    #[serde(default, skip_serializing_if = "utils::if_false", rename = "$malformed")]
-    /// This field is set to true if this `Presence Update` packet could not be parsed.
-    pub malformed: bool,
 }
 
 /// Information related to a role in a Discord guild.
