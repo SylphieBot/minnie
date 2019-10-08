@@ -109,7 +109,8 @@ pub enum GuildFeature {
     VanityUrl,
     Verified,
     Partnered,
-    Lurkable,
+    #[serde(alias = "LURKABLE")]
+    Public,
     Commerce,
     News,
     Discoverable,
@@ -171,6 +172,7 @@ pub struct MemberInfo {
     pub nick: Option<String>,
     pub roles: Vec<RoleId>,
     pub joined_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub premium_since: Option<DateTime<Utc>>,
     pub deaf: bool,
     pub mute: bool,
@@ -190,6 +192,7 @@ pub struct VoiceState {
     pub mute: bool,
     pub self_deaf: bool,
     pub self_mute: bool,
+    pub self_stream: bool,
     pub suppress: bool,
 }
 
