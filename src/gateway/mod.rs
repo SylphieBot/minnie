@@ -1,7 +1,6 @@
 use crate::context::DiscordContext;
 use crate::errors::*;
 use crate::model::event::*;
-use crate::model::gateway::*;
 use crate::model::types::*;
 use crate::ws::*;
 use crossbeam_channel::{self, Receiver, Sender};
@@ -18,11 +17,13 @@ use tokio::timer::Delay;
 use url::*;
 use websocket::CloseData;
 
+mod model;
+use model::*;
+pub use model::PresenceUpdate;
+
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
 // TODO: Allow setting guild_subscriptions.
-// TODO: Do not resume after certain kinds of errors. (ones that are likely to recur if we do)
-// TODO: Try to avoid resume loops.
 
 #[derive(Debug)]
 /// The type of error reported to an [`EventDispatch`].
@@ -268,11 +269,16 @@ impl Default for GatewayConfig {
     }
 }
 
+struct GatewaySharedState {
+    presence: RwLock<PresenceUpdate>,
+}
+
 struct GatewayState {
     is_shutdown: AtomicBool,
     gateway_url: Url,
     config: GatewayConfig,
     shards: Vec<Arc<ShardState>>,
+    shared: Arc<GatewaySharedState>,
 }
 
 enum ShardSignal {
@@ -464,7 +470,7 @@ async fn running_shard(
                         compress: gateway.config.compress == CompressionType::PacketCompression,
                         large_threshold: Some(150),
                         shard: Some(state.id),
-                        presence: Some(ctx.data.current_presence.read().clone()),
+                        presence: Some(gateway.shared.presence.read().clone()),
                         guild_subscriptions: true,
                     });
                     send!(pkt);
@@ -510,7 +516,7 @@ async fn running_shard(
             }
         }
         if do_presence_update {
-            send!(GatewayPacket::StatusUpdate(ctx.data.current_presence.read().clone()));
+            send!(GatewayPacket::StatusUpdate(gateway.shared.presence.read().clone()));
         }
         for packet in packets {
             send!(packet);
@@ -596,12 +602,16 @@ fn start_shard(
 pub struct GatewayController {
     ctx: RwLock<Option<DiscordContext>>,
     state: FutMutex<Option<Arc<GatewayState>>>,
+    shared_state: Arc<GatewaySharedState>,
 }
 impl GatewayController {
     pub(crate) fn new() -> GatewayController {
         GatewayController {
             ctx: RwLock::new(None),
             state: FutMutex::new(None),
+            shared_state: Arc::new(GatewaySharedState {
+                presence: RwLock::new(PresenceUpdate::default()),
+            }),
         }
     }
 
@@ -665,6 +675,7 @@ impl GatewayController {
         }
         let gateway_state = Arc::new(GatewayState {
             is_shutdown: AtomicBool::new(false),
+            shared: self.shared_state.clone(),
             gateway_url, config, shards,
         });
         *state = Some(gateway_state.clone());

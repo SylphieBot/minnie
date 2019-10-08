@@ -1,10 +1,7 @@
 use crate::errors::*;
 use crate::gateway::GatewayController;
 use crate::http::RateLimits;
-use crate::model::event::UserStatus;
-use crate::model::gateway::PacketStatusUpdate;
 use crate::model::types::DiscordToken;
-use parking_lot::RwLock;
 use reqwest::r#async::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::borrow::Cow;
@@ -12,7 +9,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::ClientConfig;
-use std::time::SystemTime;
 
 static CURRENT_CTX_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -25,7 +21,6 @@ pub(crate) struct DiscordContextData {
     pub client_token: DiscordToken,
     pub http_client: Client,
     pub rate_limits: RateLimits,
-    pub current_presence: RwLock<PacketStatusUpdate>,
     #[derivative(Debug="ignore")]
     pub rustls_connector: TlsConnector,
     #[derivative(Debug="ignore")]
@@ -112,12 +107,6 @@ impl DiscordContextBuilder {
             http_client,
             rate_limits: RateLimits::default(),
             rustls_connector: TlsConnector::from(Arc::new(rustls_config)),
-            current_presence: RwLock::new(PacketStatusUpdate {
-                since: SystemTime::now(),
-                game: None,
-                status: UserStatus::Online,
-                afk: false,
-            }),
             gateway: GatewayController::new(),
         });
         data.gateway.set_ctx(DiscordContext { data: data.clone() });

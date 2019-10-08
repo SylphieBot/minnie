@@ -6,6 +6,7 @@ use crate::model::types::*;
 use crate::model::guild::*;
 use crate::model::user::*;
 use crate::serde::*;
+use std::borrow::Cow;
 
 /// The type of an channel.
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -184,11 +185,11 @@ pub struct Attachment {
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct Embed {
-	pub title: Option<String>,
+	pub title: Option<Cow<'static, str>>,
     #[serde(rename = "type")]
 	pub embed_type: Option<EmbedType>,
-	pub description: Option<String>,
-	pub url: Option<String>,
+	pub description: Option<Cow<'static, str>>,
+	pub url: Option<Cow<'static, str>>,
 	pub timestamp: Option<DateTime<Utc>>,
 	pub color: Option<u32>,
 	pub footer: Option<EmbedFooter>,
@@ -218,8 +219,8 @@ pub enum EmbedType {
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct EmbedFooter {
-	pub name: String,
-	pub value: Option<String>,
+	pub name: Cow<'static, str>,
+	pub value: Option<Cow<'static, str>>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
 	pub inline: bool,
 }
@@ -228,8 +229,8 @@ pub struct EmbedFooter {
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct EmbedImage {
-	pub url: Option<String>,
-	pub proxy_url: Option<String>,
+	pub url: Option<Cow<'static, str>>,
+	pub proxy_url: Option<Cow<'static, str>>,
 	pub height: Option<u32>,
 	pub width: Option<u32>,
 }
@@ -238,7 +239,7 @@ pub struct EmbedImage {
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct EmbedVideo {
-	pub url: Option<String>,
+	pub url: Option<Cow<'static, str>>,
 	pub height: Option<u32>,
 	pub width: Option<u32>,
 }
@@ -247,25 +248,25 @@ pub struct EmbedVideo {
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct EmbedProvider {
-	pub name: Option<String>,
-	pub url: Option<String>,
+	pub name: Option<Cow<'static, str>>,
+	pub url: Option<Cow<'static, str>>,
 }
 
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct EmbedAuthor {
-	pub name: Option<String>,
-	pub url: Option<String>,
-	pub icon_url: Option<String>,
-	pub proxy_icon_url: Option<String>,
+	pub name: Option<Cow<'static, str>>,
+	pub url: Option<Cow<'static, str>>,
+	pub icon_url: Option<Cow<'static, str>>,
+	pub proxy_icon_url: Option<Cow<'static, str>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
 pub struct EmbedField {
-	pub name: String,
-	pub value: String,
+	pub name: Cow<'static, str>,
+	pub value: Cow<'static, str>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
 	pub inline: bool,
 }

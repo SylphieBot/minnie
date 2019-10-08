@@ -9,6 +9,34 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::time::{SystemTime, Duration};
 
+/// The presence the bot should be using.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct PresenceUpdate {
+    #[serde(with = "utils::system_time_millis")]
+    pub since: SystemTime,
+    pub game: Option<Activity>,
+    pub status: UserStatus,
+    pub afk: bool,
+}
+impl PresenceUpdate {
+    /// Creates a new presence with the given properties.
+    pub fn new(since: SystemTime, status: UserStatus) -> PresenceUpdate {
+        PresenceUpdate {
+            since,
+            game: None,
+            status,
+            afk: false,
+        }
+    }
+}
+impl Default for PresenceUpdate {
+    fn default() -> Self {
+        PresenceUpdate::new(SystemTime::now(), UserStatus::Online)
+    }
+}
+
 /// The connection properties used for the `Identify` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ConnectionProperties {
@@ -30,20 +58,9 @@ pub struct PacketIdentify {
     pub compress: bool,
     pub large_threshold: Option<u32>,
     pub shard: Option<ShardId>,
-    pub presence: Option<PacketStatusUpdate>,
+    pub presence: Option<PresenceUpdate>,
     #[serde(default, skip_serializing_if = "utils::if_true")]
     pub guild_subscriptions: bool,
-}
-
-/// The contents of the `Status Update` packet.
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct PacketStatusUpdate {
-    #[serde(with = "utils::system_time_millis")]
-    pub since: SystemTime,
-    pub game: Option<Activity>,
-    pub status: UserStatus,
-    pub afk: bool,
 }
 
 /// The contents of the `Update Voice State` packet.
@@ -157,7 +174,7 @@ pub enum GatewayPacket {
     Dispatch(PacketSequenceID, GatewayEventType, Option<GatewayEvent>),
     Heartbeat(Option<PacketSequenceID>),
     Identify(PacketIdentify),
-    StatusUpdate(PacketStatusUpdate),
+    StatusUpdate(PresenceUpdate),
     UpdateVoiceState(PacketUpdateVoiceState),
     Resume(PacketResume),
     Reconnect,

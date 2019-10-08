@@ -7,6 +7,7 @@ use crate::model::guild::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
+use std::borrow::Cow;
 use std::fmt::{Formatter, Result as FmtResult};
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -58,7 +59,7 @@ pub enum ActivityFlags {
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ActivityParty {
-    pub id: Option<String>,
+    pub id: Option<Cow<'static, str>>,
     pub size: Option<(u32, u32)>,
 }
 
@@ -67,10 +68,10 @@ pub struct ActivityParty {
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ActivityAssets {
-    pub large_image: Option<String>,
-    pub large_text: Option<String>,
-    pub small_image: Option<String>,
-    pub small_text: Option<String>,
+    pub large_image: Option<Cow<'static, str>>,
+    pub large_text: Option<Cow<'static, str>>,
+    pub small_image: Option<Cow<'static, str>>,
+    pub small_text: Option<Cow<'static, str>>,
 }
 
 /// The secrets used for an activity.
@@ -78,10 +79,10 @@ pub struct ActivityAssets {
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ActivitySecrets {
-    pub join: Option<String>,
-    pub spectate: Option<String>,
+    pub join: Option<Cow<'static, str>>,
+    pub spectate: Option<Cow<'static, str>>,
     #[serde(rename = "match")]
-    pub match_: Option<String>,
+    pub match_: Option<Cow<'static, str>>,
 }
 
 /// An activity for user presence updates.
@@ -89,14 +90,14 @@ pub struct ActivitySecrets {
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct Activity {
-    pub name: String,
+    pub name: Cow<'static, str>,
     #[serde(rename = "type")]
     pub activity_type: ActivityType,
-    pub url: Option<String>,
+    pub url: Option<Cow<'static, str>>,
     pub timestamps: Option<ActivityTimestamps>,
     pub application_id: Option<ApplicationId>,
-    pub details: Option<String>,
-    pub state: Option<String>,
+    pub details: Option<Cow<'static, str>>,
+    pub state: Option<Cow<'static, str>>,
     pub party: Option<ActivityParty>,
     pub assets: Option<ActivityAssets>,
     pub secrets: Option<ActivitySecrets>,
@@ -122,7 +123,7 @@ pub enum UserStatus {
 
 /// A struct representing the per-platform
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ClientStatus {
     pub desktop: Option<String>,
