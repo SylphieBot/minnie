@@ -19,11 +19,14 @@ use websocket::CloseData;
 
 mod model;
 use model::*;
-pub use model::PresenceUpdate;
+pub use model::{GuildMembersRequest, PresenceUpdate};
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
 // TODO: Allow setting guild_subscriptions.
+// TODO: Consider adding builders for presence updates/gateway config.
+// TODO: Add a way to get gateway status.
+// TODO: Add tests.
 
 #[derive(Debug)]
 /// The type of error reported to an [`EventDispatch`].
@@ -235,13 +238,24 @@ pub enum CompressionType {
 }
 
 /// Stores settings for a gateway.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct GatewayConfig {
     /// The number of shards to connect with. Uses the count suggested by Discord if `None`.
+    ///
+    /// Changes to this field are only applied on gateway restart.
     pub shard_count: Option<u32>,
-
     /// The type of compression used.
+    ///
+    /// Changes to this field are only applied on gateway restart.
     pub compress: CompressionType,
+    /// Whether to receive guild subscription events.
+    ///
+    /// For more information, see the Discord docs on the `guild_subscription` field in the
+    /// identify packet.
+    ///
+    /// Changes to this field are only applied on shard restart.
+    pub guild_subscription: bool,
 
     /// How long the shard manager will wait before reconnecting a shard.
     pub backoff_initial: Duration,
@@ -251,39 +265,37 @@ pub struct GatewayConfig {
     pub backoff_cap: Duration,
     /// The maximum amount of time to randomly add between connection attempts.
     pub backoff_variation: Option<Duration>,
-
-    /// Make struct non-exhaustive
-    _priv: ()
 }
 impl Default for GatewayConfig {
     fn default() -> Self {
         GatewayConfig {
             shard_count: None,
             compress: CompressionType::TransportCompression,
+            guild_subscription: true,
             backoff_initial: Duration::from_secs(1),
             backoff_factor: 2.0,
             backoff_cap: Duration::from_secs(60),
             backoff_variation: None,
-            _priv: ()
         }
     }
 }
 
 struct GatewaySharedState {
     presence: RwLock<PresenceUpdate>,
+    config: RwLock<GatewayConfig>,
 }
 
 struct GatewayState {
     is_shutdown: AtomicBool,
     gateway_url: Url,
-    config: GatewayConfig,
+    compress: CompressionType,
     shards: Vec<Arc<ShardState>>,
     shared: Arc<GatewaySharedState>,
 }
 
 enum ShardSignal {
     SendPresenceUpdate,
-    SendRequestGuildMembers(PacketRequestGuildMembers),
+    SendRequestGuildMembers(GuildMembersRequest),
     Shutdown,
     Reconnect,
 }
@@ -338,6 +350,7 @@ enum ShardPhase {
 /// A future running a single connection to a shard.
 async fn running_shard(
     ctx: &DiscordContext,
+    config: GatewayConfig,
     gateway: &GatewayState,
     state: &ShardState,
     session: &mut ShardSession,
@@ -378,7 +391,7 @@ async fn running_shard(
 
     // Connect to the gateway
     let url = gateway.gateway_url.clone();
-    let compress = gateway.config.compress == CompressionType::TransportCompression;
+    let compress = gateway.compress == CompressionType::TransportCompression;
     let mut conn = match WebsocketConnection::connect_wss(ctx, url, compress).await {
         Ok(v) => v,
         Err(e) => emit_err!(GatewayError::ConnectionError(e)),
@@ -467,11 +480,11 @@ async fn running_shard(
                             browser: ctx.data.library_name.to_string(),
                             device: ctx.data.library_name.to_string()
                         },
-                        compress: gateway.config.compress == CompressionType::PacketCompression,
+                        compress: gateway.compress == CompressionType::PacketCompression,
                         large_threshold: Some(150),
                         shard: Some(state.id),
                         presence: Some(gateway.shared.presence.read().clone()),
-                        guild_subscriptions: true,
+                        guild_subscriptions: config.guild_subscription,
                     });
                     send!(pkt);
                     conn_phase = Authenticating;
@@ -549,13 +562,16 @@ async fn shard_main_loop(
     state: &ShardState,
     dispatch: &impl GatewayHandler,
 ) {
-    let mut reconnect_delay = gateway.config.backoff_initial;
+    let mut reconnect_delay = gateway.shared.config.read().backoff_initial;
     let mut session = ShardSession::Inactive;
     loop {
+        let config = gateway.shared.config.read().clone();
         let result = running_shard(
-            &ctx, gateway, state, &mut session, dispatch,
+            &ctx, config, gateway, state, &mut session, dispatch,
         ).await;
         state.is_connected.store(false, Ordering::Relaxed);
+
+        let config = gateway.shared.config.read().clone();
         match result {
             ShardStatus::Disconnect => return,
             ShardStatus::Shutdown => {
@@ -563,16 +579,16 @@ async fn shard_main_loop(
                 return;
             },
             ShardStatus::Reconnect => {
-                reconnect_delay = gateway.config.backoff_initial
+                reconnect_delay = config.backoff_initial
             },
             ShardStatus::ReconnectWithBackoff => {
                 info!("Waiting {} seconds before reconnecting shard #{}...",
                       reconnect_delay.as_millis() as f32 / 1000.0, state.id);
                 Delay::new(Instant::now() + reconnect_delay).compat().await.ok();
-                let f32_secs = reconnect_delay.as_secs_f64() * gateway.config.backoff_factor;
+                let f32_secs = reconnect_delay.as_secs_f64() * config.backoff_factor;
                 reconnect_delay = Duration::from_secs_f64(f32_secs);
-                if reconnect_delay > gateway.config.backoff_cap {
-                    reconnect_delay = gateway.config.backoff_cap;
+                if reconnect_delay > config.backoff_cap {
+                    reconnect_delay = config.backoff_cap;
                 }
             }
         }
@@ -602,15 +618,16 @@ fn start_shard(
 pub struct GatewayController {
     ctx: RwLock<Option<DiscordContext>>,
     state: FutMutex<Option<Arc<GatewayState>>>,
-    shared_state: Arc<GatewaySharedState>,
+    shared: Arc<GatewaySharedState>,
 }
 impl GatewayController {
-    pub(crate) fn new() -> GatewayController {
+    pub(crate) fn new(presence: PresenceUpdate, config: GatewayConfig) -> GatewayController {
         GatewayController {
             ctx: RwLock::new(None),
             state: FutMutex::new(None),
-            shared_state: Arc::new(GatewaySharedState {
-                presence: RwLock::new(PresenceUpdate::default()),
+            shared: Arc::new(GatewaySharedState {
+                presence: RwLock::new(presence),
+                config: RwLock::new(config),
             }),
         }
     }
@@ -639,13 +656,15 @@ impl GatewayController {
     }
     async fn connect_current(
         &self,
-        state: &mut Option<Arc<GatewayState>>, config: GatewayConfig,
+        state: &mut Option<Arc<GatewayState>>,
         executor: &mut impl Spawn, dispatch: impl GatewayHandler,
     ) -> Result<()> {
         let dispatch = Arc::new(dispatch);
         if state.is_some() {
             self.disconnect_current(state).await;
         }
+
+        let config = self.shared.config.read().clone();
 
         let ctx = self.ctx();
         let gateway_bot = ctx.routes().get_gateway_bot().await?;
@@ -675,8 +694,9 @@ impl GatewayController {
         }
         let gateway_state = Arc::new(GatewayState {
             is_shutdown: AtomicBool::new(false),
-            shared: self.shared_state.clone(),
-            gateway_url, config, shards,
+            compress: config.compress,
+            shared: self.shared.clone(),
+            gateway_url, shards,
         });
         *state = Some(gateway_state.clone());
         for shard in &gateway_state.shards {
@@ -691,10 +711,10 @@ impl GatewayController {
     /// Connects the bot to the Discord gateway. If the bot is already connected, it disconnects
     /// the previous connection.
     pub async fn connect(
-        &self, config: GatewayConfig, executor: &mut impl Spawn, dispatch: impl GatewayHandler,
+        &self, executor: &mut impl Spawn, dispatch: impl GatewayHandler,
     ) -> Result<()> {
         let mut state = self.state.lock().await;
-        self.connect_current(&mut *state, config, executor, dispatch).await?;
+        self.connect_current(&mut *state, executor, dispatch).await?;
         Ok(())
     }
 
@@ -703,5 +723,55 @@ impl GatewayController {
         let mut state = self.state.lock().await;
         self.disconnect_current(&mut state).await;
         Ok(())
+    }
+
+    /// Restarts all shars of the gateway. Does nothing if the gateway is not connected.
+    pub async fn reconnect_shards(&self) {
+        self.reconnect_shards_partial(|_| true).await;
+    }
+
+    /// Restarts any shard for which the given closure returns true. Does nothing if the gateway
+    /// is not connected.
+    pub async fn reconnect_shards_partial(&self, f: impl Fn(ShardId) -> bool) {
+        let state = self.state.lock().await;
+        if let Some(state) = &*state {
+            for shard in &state.shards {
+                if f(shard.id) {
+                    shard.send.send(ShardSignal::Reconnect).expect("Failed to send signal?");
+                }
+            }
+        }
+    }
+
+    /// Returns the current presence for the bot.
+    pub fn presence(&self) -> PresenceUpdate {
+        self.shared.presence.read().clone()
+    }
+
+    /// Sets the current presence for the bot.
+    ///
+    /// If the gateway is currently connected, this sends presence update packets to all shards.
+    pub async fn set_presence(&self, presence: PresenceUpdate) {
+        *self.shared.presence.write() = presence;
+
+        let state = self.state.lock().await;
+        if let Some(state) = &*state {
+            for shard in &state.shards {
+                shard.send.send(ShardSignal::SendPresenceUpdate).expect("Failed to send signal?");
+            }
+        }
+    }
+
+    /// Returns the current configuration for the gateway.
+    pub fn config(&self) -> GatewayConfig {
+        self.shared.config.read().clone()
+    }
+
+    /// Sets the configuration for the gateway.
+    ///
+    /// Certain changes to the configuration may not be reflected until shards or the entire
+    /// gateway are restarted.
+    pub fn set_config(&self, config: GatewayConfig) {
+        *self.shared.config.write() = config;
     }
 }

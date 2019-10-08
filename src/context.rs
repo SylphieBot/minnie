@@ -1,5 +1,5 @@
 use crate::errors::*;
-use crate::gateway::GatewayController;
+use crate::gateway::{GatewayController, GatewayConfig, PresenceUpdate};
 use crate::http::RateLimits;
 use crate::model::types::DiscordToken;
 use reqwest::r#async::{Client, ClientBuilder};
@@ -58,6 +58,8 @@ pub struct DiscordContextBuilder {
     library_name: Option<String>,
     http_user_agent: Option<String>,
     client_token: DiscordToken,
+    default_presence: PresenceUpdate,
+    gateway_config: GatewayConfig,
 }
 impl DiscordContextBuilder {
     pub fn new(client_token: DiscordToken) -> Self {
@@ -65,6 +67,8 @@ impl DiscordContextBuilder {
             library_name: None,
             http_user_agent: None,
             client_token,
+            default_presence: PresenceUpdate::default(),
+            gateway_config: GatewayConfig::default(),
         }
     }
 
@@ -75,6 +79,16 @@ impl DiscordContextBuilder {
 
     pub fn with_user_agent(mut self, agent: impl ToString) -> Self {
         self.http_user_agent = Some(agent.to_string());
+        self
+    }
+
+    pub fn with_default_presence(mut self, presence: PresenceUpdate) -> Self {
+        self.default_presence = presence;
+        self
+    }
+
+    pub fn with_gateway_config(mut self, config: GatewayConfig) -> Self {
+        self.gateway_config = config;
         self
     }
 
@@ -107,7 +121,7 @@ impl DiscordContextBuilder {
             http_client,
             rate_limits: RateLimits::default(),
             rustls_connector: TlsConnector::from(Arc::new(rustls_config)),
-            gateway: GatewayController::new(),
+            gateway: GatewayController::new(self.default_presence, self.gateway_config),
         });
         data.gateway.set_ctx(DiscordContext { data: data.clone() });
         Ok(DiscordContext { data })

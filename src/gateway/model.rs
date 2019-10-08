@@ -37,6 +37,19 @@ impl Default for PresenceUpdate {
     }
 }
 
+/// A request send to send to the gateway for guild members.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct GuildMembersRequest {
+    pub guild_id: Vec<GuildId>,
+    pub query: String,
+    pub limit: u32,
+    #[serde(default, skip_serializing_if = "utils::if_false")]
+    pub presences: bool,
+    pub user_ids: Option<Vec<UserId>>,
+}
+
 /// The connection properties used for the `Identify` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ConnectionProperties {
@@ -78,18 +91,6 @@ pub struct PacketResume {
     pub token: DiscordToken,
     pub session_id: SessionId,
     pub seq: PacketSequenceID,
-}
-
-/// The contents of the `Request Guild Members` packet.
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-pub struct PacketRequestGuildMembers {
-    pub guild_id: Vec<GuildId>,
-    pub query: String,
-    pub limit: u32,
-    #[serde(default, skip_serializing_if = "utils::if_false")]
-    pub presences: bool,
-    pub user_ids: Option<Vec<UserId>>,
 }
 
 /// The contents of the `Hello` packet.
@@ -178,7 +179,7 @@ pub enum GatewayPacket {
     UpdateVoiceState(PacketUpdateVoiceState),
     Resume(PacketResume),
     Reconnect,
-    RequestGuildMembers(PacketRequestGuildMembers),
+    RequestGuildMembers(GuildMembersRequest),
     InvalidSession(bool),
     Hello(PacketHello),
     HeartbeatAck,
