@@ -96,7 +96,7 @@ pub struct GuildMemberUpdateEvent {
     pub guild_id: GuildId,
     pub roles: Vec<RoleId>,
     pub user: User,
-    pub nick: String,
+    pub nick: Option<String>,
 }
 
 /// A `Guild Member Chunk` event.
