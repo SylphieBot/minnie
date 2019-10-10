@@ -20,6 +20,7 @@ flate2 = { version = "1.0.7", default-features = false, features = ["rust_backen
 lazy_static = "1.4.0"
 log = "0.4.6"
 parking_lot = "0.9.0"
+rand = "0.7.2"
 reqwest = { version = "0.9.15", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0.90", features = ["rc"] }
 serde_derive = "1.0.90"

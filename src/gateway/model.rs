@@ -37,7 +37,7 @@ impl Default for PresenceUpdate {
     }
 }
 
-/// A request send to send to the gateway for guild members.
+/// A request to gateway for guild members.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]

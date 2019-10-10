@@ -275,6 +275,12 @@ id_structs! {
     UserId WebhookId
 }
 
+impl GuildId {
+    pub fn shard_for_guild(&self, shard_count: u32) -> ShardId {
+        ShardId((self.0.timestamp_raw() % shard_count as u64) as u32, shard_count)
+    }
+}
+
 /// Identifies a shard.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ShardId(pub u32, pub u32);
@@ -283,8 +289,7 @@ impl ShardId {
         self.0 == 0
     }
     pub fn handles_guild(&self, guild: GuildId) -> bool {
-        let ShardId(id, count) = *self;
-        (guild.0.timestamp_raw() % count as u64) == id as u64
+        guild.shard_for_guild(self.1) == *self
     }
 }
 impl fmt::Display for ShardId {
