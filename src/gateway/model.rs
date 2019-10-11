@@ -49,6 +49,7 @@ pub struct GuildMembersRequest {
     pub presences: bool,
     pub user_ids: Option<Vec<UserId>>,
 }
+// TODO: Add constructor for a GuildMembersRequest
 
 /// The connection properties used for the `Identify` packet.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

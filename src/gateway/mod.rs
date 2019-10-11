@@ -4,31 +4,30 @@ use crate::context::DiscordContext;
 use crate::errors::*;
 use crate::model::event::*;
 use crate::model::types::*;
-use crate::ws::*;
-use crossbeam_channel::{self, Receiver, Sender};
 use failure::Fail;
 use futures::compat::*;
-use futures::task::{Spawn, SpawnExt};
+use futures::task::Spawn;
 use parking_lot::{Mutex, RwLock};
+use rand::Rng;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::timer::Delay;
-use url::*;
 use websocket::CloseData;
 
 mod model;
+mod shard;
+
 use model::*;
 pub use model::{GuildMembersRequest, PresenceUpdate};
-use rand::Rng;
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
 // TODO: Consider adding builders for presence updates/gateway config.
 // TODO: Add a way to get gateway status.
 // TODO: Add tests.
+// TODO: Only implement parsing/serialization for types we expect to serialize/parse.
 
 /// Passed to an [`GatewayHandler`] what type of error occurred.
 #[derive(Debug)]
@@ -324,394 +323,34 @@ impl Default for GatewayConfig {
     }
 }
 
-struct GatewaySharedState {
-    presence: RwLock<PresenceUpdate>,
-    config: RwLock<GatewayConfig>,
+struct CurrentGateway {
+    shared: Arc<shard::GatewayState>,
+    shards: Vec<Arc<shard::ShardState>>,
+    shard_id_map: HashMap<ShardId, usize>,
 }
-
-struct GatewayState {
-    shard_count: u32,
-    is_shutdown: AtomicBool,
-    gateway_url: Url,
-    compress: CompressionType,
-    shards: Vec<Arc<ShardState>>,
-    shard_id_map: HashMap<u32, usize>,
-    shared: Arc<GatewaySharedState>,
-}
-impl GatewayState {
-    fn broadcast(&self, signal: ShardSignal) {
-        for shard in &self.shards {
-            shard.send.send(signal.clone()).expect("Failed to send signal to shard?");
-        }
-    }
-    fn shutdown(&self) {
-        self.is_shutdown.store(true, Ordering::Relaxed);
-    }
+impl CurrentGateway {
     async fn wait_shutdown(&self) {
         loop {
             Delay::new(Instant::now() + Duration::from_millis(100)).compat().await.ok();
-            if self.shards.iter().all(|x| !x.shard_alive.load(Ordering::SeqCst)) {
+            if self.shards.iter().all(|x| x.is_shutdown()) {
                 return
             }
         }
     }
-}
-
-#[derive(Clone)]
-enum ShardSignal {
-    SendPresenceUpdate,
-    SendRequestGuildMembers(GuildMembersRequest),
-    Reconnect,
-}
-
-struct ShardState {
-    id: ShardId,
-    shard_alive: AtomicBool,
-    is_connected: AtomicBool,
-    send: Sender<ShardSignal>,
-    recv: Receiver<ShardSignal>,
-}
-enum ShardSession {
-    Inactive,
-    Resume(SessionId, PacketSequenceID),
-}
-impl ShardSession {
-    fn set_sequence_id(&mut self, seq: PacketSequenceID) {
-        if let ShardSession::Resume(_, seq_ref) = self {
-            *seq_ref = seq;
-        }
-    }
-    fn sequence_id(&self) -> Option<PacketSequenceID> {
-        match self {
-            ShardSession::Resume(_, seq) => Some(*seq),
-            ShardSession::Inactive => None,
-        }
-    }
-}
-
-enum ShardStatus {
-    Disconnect,
-    Shutdown,
-    Reconnect,
-    ReconnectWithBackoff,
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-enum ShardPhase {
-    /// The initial phase of shard connections, before the Hello packet is recieved.
-    ///
-    /// In this state, the shard manager code will allow up to 10 seconds for this packet to be
-    /// received before raising an error.
-    Initial,
-    /// The phase the shard enters when it is attempting to create a new session with an Identify
-    /// packet.
-    Authenticating,
-    /// The phase the shard enters when it is attempting to resume a disconnected session.
-    Resuming,
-    /// The phase the shard enters when the connection has been fully established.
-    Connected,
-}
-
-/// A future running a single connection to a shard.
-async fn running_shard(
-    ctx: &DiscordContext,
-    gateway_ctx: &GatewayContext,
-    config: GatewayConfig,
-    gateway: &GatewayState,
-    state: &ShardState,
-    session: &mut ShardSession,
-    dispatch: &impl GatewayHandler,
-) -> ShardStatus {
-    use self::ShardPhase::*;
-
-    /// We add an shutdown check before every time we send or recieve a packet.
-    macro_rules! check_shutdown {
-        () => {
-            if gateway.is_shutdown.load(Ordering::Relaxed) {
-                return ShardStatus::Disconnect;
-            }
-        }
-    }
-
-    // Handle errors. `conn_successful` is used to signal the shard outer loop whether exponential
-    // backoff should be used or reset.
-    let mut conn_successful = false;
-    macro_rules! emit_err {
-        (@ret_success) => {{
-            if conn_successful {
-                return ShardStatus::Reconnect
-            } else {
-                return ShardStatus::ReconnectWithBackoff
-            }
-        }};
-        (@emit $error:expr, $ignore_case:expr $(,)?) => {{
-            let err = $error;
-            let response = dispatch.on_error(gateway_ctx, &err);
-            if !dispatch.can_resume(gateway_ctx, &err) {
-                *session = ShardSession::Inactive;
-            }
-            dispatch.report_error(gateway_ctx, err);
-            match response {
-                GatewayResponse::Shutdown => return ShardStatus::Shutdown,
-                GatewayResponse::Ignore => $ignore_case,
-                GatewayResponse::Reconnect => emit_err!(@ret_success),
-            }
-        }};
-        ($error:expr $(,)?) => { emit_err!($error, false); };
-        ($error:expr, true $(,)?) => { emit_err!(@emit $error, ()); };
-        ($error:expr, false $(,)?) => { emit_err!(@emit $error, emit_err!(@ret_success)); };
-    }
-
-    // Connect to the gateway
-    let url = gateway.gateway_url.clone();
-    let compress = gateway.compress == CompressionType::TransportCompression;
-    let mut conn = match WebsocketConnection::connect_wss(ctx, url, compress).await {
-        Ok(v) => v,
-        Err(e) => emit_err!(GatewayError::ConnectionError(e)),
-    };
-    macro_rules! send {
-        ($packet:expr) => {{
-            check_shutdown!();
-            let packet = $packet;
-            if let Err(e) = conn.send(&packet).await {
-                emit_err!(GatewayError::WebsocketSendError(e));
-            }
-        }}
-    }
-
-    // Start processing gateway events
-    let mut conn_phase = Initial;
-    let conn_start = Instant::now();
-    let mut last_heartbeat = Instant::now();
-    let mut heartbeat_interval = Duration::from_secs(0);
-    let mut heartbeat_ack = false;
-    loop {
-        check_shutdown!();
-
-        // Try to read a packet from the gateway for one second, before processing other tasks.
-        let mut need_connect = false;
-        match conn.receive(|s| GatewayPacket::from_json(s, |t|
-            dispatch.ignores_event(gateway_ctx, t)
-        ), Duration::from_secs(1)).await {
-            Ok(Some(GatewayPacket::Hello(packet))) if conn_phase == Initial => {
-                heartbeat_interval = packet.heartbeat_interval;
-                heartbeat_ack = true;
-                need_connect = true;
-            }
-            Ok(Some(GatewayPacket::InvalidSession(can_resume))) if conn_phase != Initial => {
-                if conn_phase == Authenticating {
-                    emit_err!(GatewayError::AuthenticationFailure);
-                }
-                if !can_resume {
-                    *session = ShardSession::Inactive;
-                }
-                let wait_time = Duration::from_secs_f64(rand::random::<f64>() * 4.0 + 1.0);
-                Delay::new(Instant::now() + wait_time).compat().await.ok();
-                need_connect = true;
-            }
-            Ok(Some(GatewayPacket::Dispatch(seq, t, data))) if conn_phase != Initial => {
-                check_shutdown!();
-                conn_phase = Connected; // We assume we connected successfully if we got any event.
-                conn_successful = true;
-                state.is_connected.store(true, Ordering::Relaxed);
-                if let Some(data) = data {
-                    if let GatewayEvent::Ready(ev) = &data {
-                        *session = ShardSession::Resume(ev.session_id.clone(), seq);
-                    } else {
-                        session.set_sequence_id(seq);
-                    }
-                    match Error::catch_panic(|| Ok(dispatch.on_event(gateway_ctx, data))) {
-                        Ok(Err(e)) => emit_err!(GatewayError::EventHandlingFailed(e), true),
-                        Err(e) => emit_err!(GatewayError::EventHandlingPanicked(e), true),
-                        _ => { }
-                    }
-                } else {
-                    if let GatewayEventType::Unknown(ev) = t {
-                        emit_err!(GatewayError::UnknownEvent(ev), true);
-                    }
-                }
-            }
-            Ok(Some(GatewayPacket::HeartbeatAck)) => heartbeat_ack = true,
-            Ok(Some(GatewayPacket::UnknownOpcode(v))) =>
-                emit_err!(GatewayError::UnknownOpcode(v), true),
-            Ok(Some(packet)) => emit_err!(GatewayError::UnexpectedPacket(packet), true),
-            Ok(None) => { }
-            Err(e) => match e.error_kind() {
-                ErrorKind::WebsocketDisconnected(cd) =>
-                    emit_err!(GatewayError::RemoteHostDisconnected(cd.clone())),
-                ErrorKind::PacketParseError =>
-                    emit_err!(GatewayError::PacketParseFailed(e), true),
-                _ =>
-                    emit_err!(GatewayError::WebsocketError(e)),
-            }
-        }
-
-        // Send packets to connect to the gateway.
-        if need_connect {
-            match session {
-                ShardSession::Inactive => {
-                    info!("Identifying on shard #{}", state.id);
-                    let pkt = GatewayPacket::Identify(PacketIdentify {
-                        token: ctx.data.client_token.clone(),
-                        properties: ConnectionProperties {
-                            os: std::env::consts::OS.to_string(),
-                            browser: ctx.data.library_name.to_string(),
-                            device: ctx.data.library_name.to_string()
-                        },
-                        compress: gateway.compress == CompressionType::PacketCompression,
-                        large_threshold: Some(150),
-                        shard: Some(state.id),
-                        presence: Some(gateway.shared.presence.read().clone()),
-                        guild_subscriptions: config.guild_subscription,
-                    });
-                    send!(pkt);
-                    conn_phase = Authenticating;
-                    *session = ShardSession::Inactive;
-                }
-                ShardSession::Resume(sess, last_seq) => {
-                    info!("Resuming on shard #{}", state.id);
-                    let pkt = GatewayPacket::Resume(PacketResume {
-                        token: ctx.data.client_token.clone(),
-                        session_id: sess.clone(),
-                        seq: *last_seq,
-                    });
-                    send!(pkt);
-                    conn_phase = Resuming;
-                }
-            }
-        }
-
-        // Check the signal channel.
-        let mut do_reconnect = false;
-        let mut do_presence_update = false;
-        let mut packets = Vec::new();
-        while let Ok(sig) = state.recv.try_recv() {
-            match sig {
-                ShardSignal::SendPresenceUpdate =>
-                    do_presence_update = true,
-                ShardSignal::SendRequestGuildMembers(packet) =>
-                    packets.push(GatewayPacket::RequestGuildMembers(packet)),
-                ShardSignal::Reconnect =>
-                    do_reconnect = true,
-            }
-        }
-        if do_reconnect {
-            *session = ShardSession::Inactive;
-            return ShardStatus::Reconnect;
-        }
-        if do_presence_update {
-            send!(GatewayPacket::StatusUpdate(gateway.shared.presence.read().clone()));
-        }
-        for packet in packets {
-            send!(packet);
-        }
-
-        // Check various timers.
-        if conn_phase == Initial {
-            // Check if too long has passed since the start of the connection.
-            if conn_start + Duration::from_secs(10) < Instant::now() {
-                emit_err!(GatewayError::HelloTimeout);
-            }
-        } else {
-            // Check for heartbeats.
-            if last_heartbeat + heartbeat_interval < Instant::now() {
-                if !heartbeat_ack {
-                    emit_err!(GatewayError::HeartbeatTimeout);
-                }
-                send!(GatewayPacket::Heartbeat(session.sequence_id()));
-                last_heartbeat = Instant::now();
-                heartbeat_ack = false;
-            }
-        }
-    }
-}
-
-/// A future running a particular shard ID, particularly handling reconnection.
-async fn shard_main_loop(
-    ctx: &DiscordContext,
-    gateway_ctx: &GatewayContext,
-    gateway: &GatewayState,
-    state: &ShardState,
-    dispatch: &impl GatewayHandler,
-) {
-    let mut reconnect_delay = gateway.shared.config.read().backoff_initial;
-    let mut session = ShardSession::Inactive;
-    loop {
-        let config = gateway.shared.config.read().clone();
-        let result = running_shard(
-            &ctx, &gateway_ctx, config, gateway, state, &mut session, dispatch,
-        ).await;
-        state.is_connected.store(false, Ordering::Relaxed);
-
-        let config = gateway.shared.config.read().clone();
-        match result {
-            ShardStatus::Disconnect => {
-                info!("Shard #{} disconnected.", state.id);
-                return
-            },
-            ShardStatus::Shutdown => {
-                info!("Shard #{} disconnected and requested gateway shutdown.", state.id);
-                gateway.shutdown();
-                return;
-            },
-            ShardStatus::Reconnect => {
-                reconnect_delay = config.backoff_initial
-            },
-            ShardStatus::ReconnectWithBackoff => {
-                info!("Waiting {} seconds before reconnecting shard #{}...",
-                      reconnect_delay.as_millis() as f32 / 1000.0, state.id);
-                Delay::new(Instant::now() + reconnect_delay).compat().await.ok();
-                let variation = config.backoff_variation.unwrap_or(Duration::from_secs(0));
-                let f32_secs =
-                    reconnect_delay.as_secs_f64() * config.backoff_factor +
-                    variation.as_secs_f64() * rand::random::<f64>();
-                reconnect_delay = Duration::from_secs_f64(f32_secs);
-                if reconnect_delay > config.backoff_cap {
-                    reconnect_delay = config.backoff_cap;
-                }
-            }
-        }
-    }
-}
-
-/// Spawns a shard handler into a future executor.
-fn start_shard(
-    ctx: DiscordContext,
-    state: Arc<ShardState>,
-    gateway: Arc<GatewayState>,
-    executor: &mut impl Spawn,
-    dispatch: Arc<impl GatewayHandler>,
-) {
-    executor.spawn(async move {
-        let gateway_ctx = GatewayContext {
-            ctx: ctx.clone(),
-            shard_id: state.id,
-        };
-        if let Err(e) = Error::catch_panic_async(async {
-            shard_main_loop(&ctx, &gateway_ctx, &gateway, &state, &*dispatch).await;
-            state.shard_alive.store(false, Ordering::SeqCst);
-            Ok(())
-        }).await {
-            dispatch.report_error(&gateway_ctx, GatewayError::Panicked(e));
-        }
-    }).expect("Could not spawn future into given executor.");
 }
 
 /// Handles connecting and disconnecting to the Discord gateway.
 pub struct GatewayController {
     ctx: RwLock<Option<DiscordContext>>,
-    state: Mutex<Option<Arc<GatewayState>>>,
-    shared: Arc<GatewaySharedState>,
+    current: Mutex<Option<Arc<CurrentGateway>>>,
+    shared: Arc<shard::ManagerSharedState>,
 }
 impl GatewayController {
     pub(crate) fn new(presence: PresenceUpdate, config: GatewayConfig) -> GatewayController {
         GatewayController {
             ctx: RwLock::new(None),
-            state: Mutex::new(None),
-            shared: Arc::new(GatewaySharedState {
-                presence: RwLock::new(presence),
-                config: RwLock::new(config),
-            }),
+            current: Mutex::new(None),
+            shared: Arc::new(shard::ManagerSharedState::new(presence, config)),
         }
     }
 
@@ -730,46 +369,32 @@ impl GatewayController {
         // Initialize the new gateway object.
         let config = self.shared.config.read().clone();
         let ctx = self.ctx();
-        let gateway_bot = ctx.routes().get_gateway_bot().await?;
+        let endpoint = ctx.routes().get_gateway_bot().await?;
         let shard_count = match config.shard_count {
             Some(count) => count,
-            None => gateway_bot.shards,
+            None => endpoint.shards,
         };
 
-        let mut gateway_url = Url::parse(&gateway_bot.url).expect("Could not parse gateway URL.");
-        let full_path = format!("v=6&encoding=json{}",
-                                if config.compress == CompressionType::TransportCompression {
-                                    "&compress=zlib-stream"
-                                } else {
-                                    ""
-                                });
-        gateway_url.set_query(Some(&full_path));
+        let gateway = Arc::new(shard::GatewayState::new(&endpoint.url, self.shared.clone()));
 
         let mut shards = Vec::new();
         let mut shard_id_map = HashMap::new();
         for id in 0..shard_count {
             if config.shard_filter.accepts_shard(id) {
                 let id = ShardId(id, shard_count);
-                let (send, recv) = crossbeam_channel::unbounded();
-                shard_id_map.insert(id.0, shards.len());
-                shards.push(Arc::new(ShardState {
-                    id, send, recv,
-                    shard_alive: AtomicBool::new(true),
-                    is_connected: AtomicBool::new(false),
-                }));
+                shard_id_map.insert(id, shards.len());
+                shards.push(Arc::new(shard::ShardState::new(id, gateway.clone())));
             }
         }
-        let gateway_state = Arc::new(GatewayState {
-            is_shutdown: AtomicBool::new(false),
-            compress: config.compress,
-            shared: self.shared.clone(),
-            shard_count, gateway_url, shards, shard_id_map,
+        let gateway_state = Arc::new(CurrentGateway {
+            shards, shard_id_map,
+            shared: gateway.clone(),
         });
 
         // Set the current gateway to our new gateway.
-        let mut state = self.state.lock();
+        let mut state = self.current.lock();
         if let Some(old_gateway) = state.take() {
-            old_gateway.shutdown();
+            old_gateway.shared.shutdown();
         }
         *state = Some(gateway_state.clone());
         drop(state);
@@ -777,8 +402,8 @@ impl GatewayController {
         // Start each shard in the gateway.
         let dispatch = Arc::new(dispatch);
         for shard in &gateway_state.shards {
-            start_shard(
-                ctx.clone(), shard.clone(), gateway_state.clone(), executor, dispatch.clone(),
+            shard::start_shard(
+                ctx.clone(), shard.clone(), executor, dispatch.clone(),
             );
         }
 
@@ -790,11 +415,11 @@ impl GatewayController {
     /// If `wait` is set to `true`, this function will block until all shards disconnect.
     pub async fn disconnect(&self, wait: bool) {
         let gateway = {
-            let mut state = self.state.lock();
+            let mut state = self.current.lock();
             state.take()
         };
         if let Some(gateway) = gateway {
-            gateway.shutdown();
+            gateway.shared.shutdown();
             if wait {
                 gateway.wait_shutdown().await;
             }
@@ -809,11 +434,11 @@ impl GatewayController {
     /// Restarts any shard for which the given closure returns true. Does nothing if the gateway
     /// is not connected.
     pub fn reconnect_shards_partial(&self, f: impl Fn(ShardId) -> bool) {
-        let state = self.state.lock();
+        let state = self.current.lock();
         if let Some(state) = &*state {
             for shard in &state.shards {
                 if f(shard.id) {
-                    shard.send.send(ShardSignal::Reconnect).expect("Failed to send signal?");
+                    shard.reconnect();
                 }
             }
         }
@@ -830,9 +455,11 @@ impl GatewayController {
     pub fn set_presence(&self, presence: PresenceUpdate) {
         *self.shared.presence.write() = presence;
 
-        let state = self.state.lock();
+        let state = self.current.lock();
         if let Some(state) = &*state {
-            state.broadcast(ShardSignal::SendPresenceUpdate);
+            for shard in &state.shards {
+                shard.notify_update_presence();
+            }
         }
     }
 
@@ -858,17 +485,15 @@ impl GatewayController {
     pub fn request_guild_members(
         &self, shard: Option<ShardId>, packet: GuildMembersRequest,
     ) {
-        let state = self.state.lock();
+        let state = self.current.lock();
         if let Some(state) = &*state {
             let shard = match shard {
-                Some(ShardId(id, shard_count)) => {
-                    assert_eq!(shard_count, state.shard_count, "Shard not found in gateway.");
+                Some(id) => {
                     *state.shard_id_map.get(&id).expect("Shard not found in gateway.")
                 }
                 None => rand::thread_rng().gen_range(0, state.shards.len()),
             };
-            state.shards[shard].send.send(ShardSignal::SendRequestGuildMembers(packet))
-                .expect("Failed to send signal?");
+            state.shards[shard].request_guild_members(packet);
         }
     }
 }
