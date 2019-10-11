@@ -52,7 +52,7 @@ pub struct GuildMembersRequest {
 // TODO: Add constructor for a GuildMembersRequest
 
 /// The connection properties used for the `Identify` packet.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct ConnectionProperties {
     #[serde(rename = "$os")]
     pub os: String,
@@ -64,7 +64,7 @@ pub struct ConnectionProperties {
 
 /// The contents of the `Identify` packet.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketIdentify {
     pub token: DiscordToken,
     pub properties: ConnectionProperties,
@@ -78,7 +78,7 @@ pub struct PacketIdentify {
 }
 
 /// The contents of the `Update Voice State` packet.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketUpdateVoiceState {
     pub guild_id: GuildId,
     pub channel_id: Option<ChannelId>,
@@ -87,7 +87,7 @@ pub struct PacketUpdateVoiceState {
 }
 
 /// The contents of the `Resume` packet.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketResume {
     pub token: DiscordToken,
     pub session_id: SessionId,
@@ -95,7 +95,7 @@ pub struct PacketResume {
 }
 
 /// The contents of the `Hello` packet.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct PacketHello {
     #[serde(with = "utils::duration_millis")]
     pub heartbeat_interval: Duration,
@@ -158,11 +158,19 @@ impl GatewayOpcode {
 #[serde(transparent)]
 pub struct PacketSequenceID(pub u64);
 
+/// A frame used to send packets to the Discord gateway.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct GatewayPacketFrame<T: Serialize> {
+    pub op: i128,
+    pub s: Option<PacketSequenceID>,
+    pub d: T,
+}
+
 /// The frame of a packet sent through the Discord gateway.
 ///
 /// Used by the fallback for malformed `Presence Update` packets.
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 struct GatewayPacketInvalidPresenceUpdate<'a> {
     op: i128,
     t: &'a str,
@@ -170,20 +178,16 @@ struct GatewayPacketInvalidPresenceUpdate<'a> {
     d: MalformedPresenceUpdateEvent,
 }
 
-/// A packet sent through the Discord gateway.
+/// A packet received from the Discord gateway.
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum GatewayPacket {
     Dispatch(PacketSequenceID, GatewayEventType, Option<GatewayEvent>),
     Heartbeat(Option<PacketSequenceID>),
-    Identify(PacketIdentify),
-    StatusUpdate(PresenceUpdate),
-    UpdateVoiceState(PacketUpdateVoiceState),
-    Resume(PacketResume),
     Reconnect,
-    RequestGuildMembers(GuildMembersRequest),
     InvalidSession(bool),
     Hello(PacketHello),
     HeartbeatAck,
+    UnexpectedPacket(GatewayOpcode),
     UnknownOpcode(i128),
 }
 impl GatewayPacket {
@@ -222,73 +226,13 @@ impl GatewayPacket {
         match self {
             GatewayPacket::Dispatch(..) => GatewayOpcode::Dispatch,
             GatewayPacket::Heartbeat(_) => GatewayOpcode::Heartbeat,
-            GatewayPacket::Identify(_) => GatewayOpcode::Identify,
-            GatewayPacket::StatusUpdate(_) => GatewayOpcode::StatusUpdate,
-            GatewayPacket::UpdateVoiceState(_) => GatewayOpcode::VoiceStatusUpdate,
-            GatewayPacket::Resume(_) => GatewayOpcode::Resume,
             GatewayPacket::Reconnect => GatewayOpcode::Reconnect,
-            GatewayPacket::RequestGuildMembers(_) => GatewayOpcode::RequestGuildMembers,
             GatewayPacket::InvalidSession(_) => GatewayOpcode::InvalidSession,
             GatewayPacket::Hello(_) => GatewayOpcode::Hello,
             GatewayPacket::HeartbeatAck => GatewayOpcode::HeartbeatAck,
+            GatewayPacket::UnexpectedPacket(op) => *op,
             GatewayPacket::UnknownOpcode(op) => GatewayOpcode::Unknown(*op),
         }
-    }
-
-    /// Whether this packet should be sent to the gateway
-    pub fn should_send(&self) -> bool {
-        match self.op() {
-            GatewayOpcode::Heartbeat | GatewayOpcode::Identify | GatewayOpcode::StatusUpdate |
-                GatewayOpcode::VoiceStatusUpdate | GatewayOpcode::Resume |
-                GatewayOpcode::RequestGuildMembers => true,
-            _ => false,
-        }
-    }
-
-    /// Whether this packet should be received from the gateway
-    pub fn should_receive(&self) -> bool {
-        match self.op() {
-            GatewayOpcode::Dispatch | GatewayOpcode::Heartbeat | GatewayOpcode::Reconnect |
-                GatewayOpcode::InvalidSession | GatewayOpcode::Hello |
-                GatewayOpcode::HeartbeatAck => true,
-            _ => false,
-        }
-    }
-}
-impl Serialize for GatewayPacket {
-    fn serialize<S: Serializer>(&self, serializer: S) -> StdResult<S::Ok, S::Error> {
-        let is_human_readable = serializer.is_human_readable();
-        let mut ser = serializer.serialize_struct("GatewayPacket", 4)?;
-        ser.serialize_field("op", &self.op().to_i128())?;
-        match self {
-            GatewayPacket::Dispatch(seq, _, _) => ser.serialize_field("s", seq)?,
-            GatewayPacket::Heartbeat(seq) => ser.serialize_field("s", seq)?,
-            _ => ser.skip_field("s")?,
-        }
-        match self {
-            GatewayPacket::Dispatch(_, _, _) => { }
-            _ => ser.skip_field("t")?,
-        }
-        match self {
-            GatewayPacket::Dispatch(_, _, Some(ev)) =>
-                return ev.serialize(SerializeEvent::<S>(is_human_readable, ser)),
-            GatewayPacket::Dispatch(_, t, None) => {
-                ser.serialize_field("t", t)?;
-                ser.serialize_field("d", &())?;
-            }
-            GatewayPacket::Heartbeat(_) => ser.serialize_field("d", &())?,
-            GatewayPacket::Identify(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::StatusUpdate(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::UpdateVoiceState(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::Resume(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::Reconnect => ser.serialize_field("d", &())?,
-            GatewayPacket::RequestGuildMembers(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::InvalidSession(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::Hello(op) => ser.serialize_field("d", op)?,
-            GatewayPacket::HeartbeatAck => ser.serialize_field("d", &())?,
-            GatewayPacket::UnknownOpcode(_) => ser.serialize_field("d", &())?,
-        }
-        ser.end()
     }
 }
 impl <'de> Deserialize<'de> for GatewayPacket {
@@ -423,16 +367,6 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
                             } else {
                                 delayed_d = Some(map.next_value::<JsonValue>()?.to_string());
                             },
-                            GatewayOpcode::Identify =>
-                                d = Some(GatewayPacket::Identify(map.next_value()?)),
-                            GatewayOpcode::StatusUpdate =>
-                                d = Some(GatewayPacket::StatusUpdate(map.next_value()?)),
-                            GatewayOpcode::VoiceStatusUpdate =>
-                                d = Some(GatewayPacket::UpdateVoiceState(map.next_value()?)),
-                            GatewayOpcode::Resume =>
-                                d = Some(GatewayPacket::Resume(map.next_value()?)),
-                            GatewayOpcode::RequestGuildMembers =>
-                                d = Some(GatewayPacket::RequestGuildMembers(map.next_value()?)),
                             GatewayOpcode::InvalidSession =>
                                 d = Some(GatewayPacket::InvalidSession(map.next_value()?)),
                             GatewayOpcode::Hello =>
@@ -479,18 +413,8 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
                 },
                 GatewayOpcode::Heartbeat =>
                     GatewayPacket::Heartbeat(s.data.take()),
-                GatewayOpcode::Identify =>
-                    GatewayPacket::Identify(deserialize_as(delayed_d)?),
-                GatewayOpcode::StatusUpdate =>
-                    GatewayPacket::StatusUpdate(deserialize_as(delayed_d)?),
-                GatewayOpcode::VoiceStatusUpdate =>
-                    GatewayPacket::UpdateVoiceState(deserialize_as(delayed_d)?),
-                GatewayOpcode::Resume =>
-                    GatewayPacket::Resume(deserialize_as(delayed_d)?),
                 GatewayOpcode::Reconnect =>
                     GatewayPacket::Reconnect,
-                GatewayOpcode::RequestGuildMembers =>
-                    GatewayPacket::RequestGuildMembers(deserialize_as(delayed_d)?),
                 GatewayOpcode::InvalidSession =>
                     GatewayPacket::InvalidSession(deserialize_as(delayed_d)?),
                 GatewayOpcode::Hello =>
@@ -499,6 +423,8 @@ impl <'de, F: Fn(&GatewayEventType) -> bool> Visitor<'de> for GatewayPacketVisit
                     GatewayPacket::HeartbeatAck,
                 GatewayOpcode::Unknown(op) =>
                     GatewayPacket::UnknownOpcode(op),
+                op =>
+                    GatewayPacket::UnexpectedPacket(op),
             }
         } else {
             // We got s before d, but we were going to ignore d anyway, or we didn't get d at all.

@@ -209,9 +209,13 @@ async fn running_shard(
         Err(e) => emit_err!(GatewayError::ConnectionError(e)),
     };
     macro_rules! send {
-        ($packet:expr) => {{
+        ($packet_op:ident, $seq:expr, $data:expr) => {{
             check_shutdown!();
-            let packet = $packet;
+            let packet = GatewayPacketFrame {
+                op: GatewayOpcode::$packet_op.to_i128(),
+                s: $seq,
+                d: $data,
+            };
             if let Err(e) = conn.send(&packet).await {
                 emit_err!(GatewayError::WebsocketSendError(e));
             }
@@ -290,7 +294,7 @@ async fn running_shard(
             match session {
                 ShardSession::Inactive => {
                     info!("Identifying on shard #{}", shard.id);
-                    let pkt = GatewayPacket::Identify(PacketIdentify {
+                    let pkt = PacketIdentify {
                         token: gateway_ctx.ctx.data.client_token.clone(),
                         properties: ConnectionProperties {
                             os: std::env::consts::OS.to_string(),
@@ -302,19 +306,19 @@ async fn running_shard(
                         shard: Some(shard.id),
                         presence: Some(shard.gateway.shared.presence.read().clone()),
                         guild_subscriptions: config.guild_subscription,
-                    });
-                    send!(pkt);
+                    };
+                    send!(Identify, None, pkt);
                     conn_phase = Authenticating;
                     *session = ShardSession::Inactive;
                 }
                 ShardSession::Resume(sess, last_seq) => {
                     info!("Resuming on shard #{}", shard.id);
-                    let pkt = GatewayPacket::Resume(PacketResume {
+                    let pkt = PacketResume {
                         token: gateway_ctx.ctx.data.client_token.clone(),
                         session_id: sess.clone(),
                         seq: *last_seq,
-                    });
-                    send!(pkt);
+                    };
+                    send!(Resume, None, pkt);
                     conn_phase = Resuming;
                 }
             }
@@ -323,13 +327,13 @@ async fn running_shard(
         // Check the signal channel.
         let mut do_reconnect = false;
         let mut do_presence_update = false;
-        let mut packets = Vec::new();
+        let mut member_request_packets = Vec::new();
         while let Ok(sig) = shard.recv.try_recv() {
             match sig {
                 ShardSignal::SendPresenceUpdate =>
                     do_presence_update = true,
                 ShardSignal::SendRequestGuildMembers(packet) =>
-                    packets.push(GatewayPacket::RequestGuildMembers(packet)),
+                    member_request_packets.push(packet),
                 ShardSignal::Reconnect =>
                     do_reconnect = true,
             }
@@ -339,10 +343,10 @@ async fn running_shard(
             return ShardStatus::Reconnect;
         }
         if do_presence_update {
-            send!(GatewayPacket::StatusUpdate(shard.gateway.shared.presence.read().clone()));
+            send!(StatusUpdate, None, shard.gateway.shared.presence.read().clone());
         }
-        for packet in packets {
-            send!(packet);
+        for packet in member_request_packets {
+            send!(RequestGuildMembers, None, packet);
         }
 
         // Check various timers.
@@ -357,7 +361,7 @@ async fn running_shard(
                 if !heartbeat_ack {
                     emit_err!(GatewayError::HeartbeatTimeout);
                 }
-                send!(GatewayPacket::Heartbeat(session.sequence_id()));
+                send!(Heartbeat, session.sequence_id(), None::<()>);
                 last_heartbeat = Instant::now();
                 heartbeat_ack = false;
             }
