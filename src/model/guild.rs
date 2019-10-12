@@ -1,10 +1,13 @@
 //! Types related to Discord guilds.
 
 use chrono::{DateTime, Utc};
+use crate::errors::*;
 use crate::model::channel::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
+use std::borrow::Cow;
+use std::fmt;
 use std::time::Duration;
 
 /// Represents an unavailable guild.
@@ -135,12 +138,65 @@ pub struct Role {
     pub mentionable: bool,
 }
 
+/// Identifies a particular built-in or custom emoji.
+#[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub enum EmojiRef {
+    Builtin(Cow<'static, str>),
+    Custom(Cow<'static, str>, EmojiId),
+}
+impl fmt::Display for EmojiRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EmojiRef::Builtin(s) => f.write_str(s),
+            EmojiRef::Custom(n, i) => {
+                f.write_str(n)?;
+                f.write_str(":")?;
+                fmt::Display::fmt(&i.0, f)
+            }
+        }
+    }
+}
+
+impl Serialize for EmojiRef {
+    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+        #[derive(Serialize)]
+        struct RawEmojiRef<'a> {
+            id: Option<EmojiId>,
+            name: &'a str,
+        }
+        match self {
+            EmojiRef::Builtin(s) => RawEmojiRef {
+                id: None,
+                name: s.as_ref(),
+            },
+            EmojiRef::Custom(name, id) => RawEmojiRef {
+                id: Some(*id),
+                name: name.as_ref(),
+            },
+        }.serialize(serializer)
+    }
+}
+impl <'de> Deserialize<'de> for EmojiRef {
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+        #[derive(Deserialize)]
+        struct RawEmojiRef {
+            id: Option<EmojiId>,
+            name: String,
+        }
+        let d = RawEmojiRef::deserialize(deserializer)?;
+        Ok(match d.id {
+            Some(id) => EmojiRef::Custom(d.name.into(), id),
+            None => EmojiRef::Builtin(d.name.into()),
+        })
+    }
+}
+
 /// Information related to an emoji in a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct Emoji {
-    pub id: Option<EmojiId>,
-    pub name: String,
+    #[serde(flatten)]
+    pub name: EmojiRef,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub roles: Vec<RoleId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -193,6 +249,21 @@ pub struct VoiceState {
     pub self_mute: bool,
     pub self_stream: bool,
     pub suppress: bool,
+}
+
+/// Partial information about a Discord channel.
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct PartialGuild {
+    pub id: GuildId,
+    pub name: String,
+    pub icon: Option<String>,
+    pub splash: Option<String>,
+    pub verification_level: VerificationLevel,
+    pub features: EnumSet<GuildFeature>,
+    pub vanity_url_code: Option<String>,
+    pub description: Option<String>,
+    pub banner: Option<String>,
 }
 
 /// Information related to a role in a Discord guild.

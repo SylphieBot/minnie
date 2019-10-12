@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use crate::errors::*;
 use crate::model::channel::*;
 use crate::model::guild::*;
+use crate::model::message::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;

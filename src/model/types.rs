@@ -48,7 +48,7 @@ pub enum Permission {
     ManageEmojis = 30,
 }
 
-/// A struct representing a Discord token.
+/// An type containing a a client token.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct DiscordToken(Arc<str>);
@@ -79,10 +79,18 @@ impl DiscordToken {
         val.set_sensitive(true);
         val
     }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 impl fmt::Debug for DiscordToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("<discord token omitted>")
+    }
+}
+impl From<DiscordToken> for Arc<str> {
+    fn from(tok: DiscordToken) -> Self {
+        tok.0.clone()
     }
 }
 

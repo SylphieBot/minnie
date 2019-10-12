@@ -4,21 +4,35 @@ use crate::model::guild::*;
 use crate::model::types::*;
 use crate::serde::*;
 use std::borrow::Cow;
+use std::fmt;
 use std::time::SystemTime;
 
-/// A struct representing a Discord user. Returned by most events involving users.
+/// The discriminator for a user.
+///
+/// Although this contains an `u16`, the contents should be treated as a 4 character string
+/// rather than as a number.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct Discriminator(#[serde(with = "utils::discriminator")] pub u16);
+impl fmt::Display for Discriminator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:04}", self.0)
+    }
+}
+
+/// A struct representing a user. Returned by most events involving users.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct User {
     pub id: UserId,
     pub username: String,
-    pub discriminator: String,
+    pub discriminator: Discriminator,
     pub avatar: Option<String>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub bot: bool,
 }
 
-/// A struct representing a Discord user with additional member information. Used as part of
+/// A struct representing a user with additional member information. Used as part of
 /// messages returned by certain events.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
@@ -28,19 +42,19 @@ pub struct MentionUser {
     pub member: Option<MemberInfo>,
 }
 
-/// A struct representing a partial Discord user. Exists in `Presence Update` events.
+/// A struct representing changes in an user. Exists in `Presence Update` events.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct PartialUser {
     pub id: UserId,
     pub username: Option<String>,
-    pub discriminator: Option<String>,
+    pub discriminator: Option<Discriminator>,
     pub avatar: Option<String>,
     pub bot: Option<bool>,
 }
 
-/// A struct representing a full Discord user. Returned only by the `/users/@me` endpoint.
+/// A struct representing a full user. Returned only by the `/users/@me` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct FullUser {
@@ -171,12 +185,12 @@ pub enum ActivityFlags {
     Play = 5,
 }
 
-/// The party sizes available for an activity.
+/// The party of an activity.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ActivityParty {
-    pub id: Option<Cow<'static, str>>,
+    pub id: Option<String>,
     pub size: Option<(u32, u32)>,
 }
 
@@ -196,10 +210,10 @@ pub struct ActivityAssets {
 #[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ActivitySecrets {
-    pub join: Option<Cow<'static, str>>,
-    pub spectate: Option<Cow<'static, str>>,
+    pub join: Option<String>,
+    pub spectate: Option<String>,
     #[serde(rename = "match")]
-    pub match_: Option<Cow<'static, str>>,
+    pub match_secret: Option<String>,
 }
 
 /// An activity for user presence updates.

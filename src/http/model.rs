@@ -1,5 +1,6 @@
 use crate::errors::*;
 use crate::model::channel::*;
+use crate::model::message::*;
 use crate::model::types::*;
 use crate::serde::*;
 use reqwest::r#async::multipart::Part;
@@ -76,7 +77,7 @@ pub struct CreateMessageParams {
 pub struct CreateMessageFile {
     pub file_name: Cow<'static, str>,
     pub mime_type: Cow<'static, str>,
-    pub contents: Vec<u8>,
+    pub contents: Cow<'static, [u8]>,
 }
 impl CreateMessageFile {
     pub(crate) fn to_part(&self) -> Result<Part> {
@@ -106,10 +107,58 @@ pub struct EditMessageParams {
 }
 
 /// The parameters of the `Edit Channel Permissions` endpoint.
-#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[non_exhaustive]
 pub struct EditChannelPermissionsParams {
     pub allow: EnumSet<Permission>,
     pub deny: EnumSet<Permission>,
+}
+
+/// The parameters of the `Create Channel Invite` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
+pub struct CreateChannelInviteParams {
+    pub max_age: Option<u32>,
+    pub max_uses: Option<u32>,
+    pub temporary: Option<bool>,
+    pub unique: Option<bool>,
+}
+
+/// The parameters of the `Create Guild Emoji` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct CreateGuildEmojiParams {
+    pub name: Cow<'static, str>,
+    pub contents: Cow<'static, str>,
+    pub roles: Option<Vec<RoleId>>,
+}
+impl CreateGuildEmojiParams {
+    pub fn new(
+        name: impl Into<Cow<'static, str>>, contents: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        CreateGuildEmojiParams {
+            name: name.into(),
+            contents: contents.into(),
+            roles: None,
+        }
+    }
+}
+
+/// The parameters of the `Modify Guild Emoji` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct ModifyGuildEmojiParams {
+    pub name: Cow<'static, str>,
+    pub roles: Option<Vec<RoleId>>,
+}
+impl ModifyGuildEmojiParams {
+    pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
+        ModifyGuildEmojiParams {
+            name: name.into(),
+            roles: None,
+        }
+    }
 }

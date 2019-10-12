@@ -9,6 +9,7 @@ opt-level = 3
 lto = true
 
 [dependencies]
+base64 = "0.10.1"
 chrono = { version = "0.4", features = ["serde"] }
 crossbeam-channel = "0.3"
 derivative = "1.0.2"

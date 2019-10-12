@@ -131,6 +131,43 @@ pub mod utils {
         }
     }
 
+    pub mod discriminator {
+        use super::*;
+
+        pub fn serialize<S: Serializer>(t: &u16, s: S) -> Result<S::Ok, S::Error> {
+            let id_str = format!("#{:04}", *t);
+            id_str.serialize(s)
+        }
+
+        struct DeserializeVisiter;
+        impl <'de> Visitor<'de> for DeserializeVisiter {
+            type Value = u16;
+            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+                formatter.write_str("discriminator")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<u16, E> where E: DeError {
+                if v.is_empty() {
+                    return Err(E::custom("discriminator is empty"))
+                }
+                let v = if v.starts_with('#') {
+                    &v[1..]
+                } else {
+                    v
+                };
+                v.parse().map_err(|_| E::custom("could not parse discriminator"))
+            }
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<u16, E> where E: DeError {
+                self.visit_str(::std::str::from_utf8(v)
+                    .map_err(|_| E::custom("could not parse snowflake discriminator as utf-8"))?)
+            }
+
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<u16, D::Error> {
+            d.deserialize_any(DeserializeVisiter)
+        }
+    }
+
     macro_rules! option_wrapper {
         ($name:ident, $orig:literal, $ty:ty) => {
             pub mod $name {

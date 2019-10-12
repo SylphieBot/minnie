@@ -280,7 +280,7 @@ impl RateLimitRoute {
     ) -> Result<Response> {
         loop {
             self.check_wait(global_limit, id).await;
-            match dbg!(check_response(make_request()?).await?) {
+            match check_response(make_request()?).await? {
                 ResponseStatus::Success(rate_limit, response) => {
                     self.push_rate_info(rate_limit, store, id);
                     return Ok(response)
