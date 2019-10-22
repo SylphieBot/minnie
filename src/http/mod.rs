@@ -30,11 +30,23 @@ pub(crate) struct RateLimits {
 /// Makes raw requests to Discord's API and handles rate limiting.
 ///
 /// Instances can be obtained by calling [`DiscordContext::routes`].
-#[derive(Copy, Clone)]
-pub struct Routes<'a>(&'a DiscordContext);
+#[derive(Clone, Debug)]
+pub struct Routes<'a> {
+    ctx: &'a DiscordContext,
+    reason: Option<String>,
+}
 impl DiscordContext {
     pub fn routes(&self) -> Routes<'_> {
-        Routes(self)
+        Routes { 
+            ctx: self,
+            reason: None,
+        }
+    }
+}
+impl <'a> Routes<'a> {
+    /// Sets the reason for the API call. This is recorded in the audit log for many calls.
+    pub fn reason<'c>(self, reason: impl Into<String>) -> Self {
+        Routes { reason: Some(reason.into()), ..self }
     }
 }
 
@@ -83,19 +95,21 @@ macro_rules! routes {
                 $(rate_id = $rate_id.into();)?
                 $(let $let_name $(: $let_ty)? = $let_expr;)*
                 $(let __route = route!($($route)*);)?
-                let mut _response = self.0.data.rate_limits.routes.$name.perform_rate_limited(
-                    &self.0.data.rate_limits.global_limit,
-                    &self.0.data.rate_limits.buckets_store,
+                let Routes { ctx, reason } = self;
+                let mut _response = ctx.data.rate_limits.routes.$name.perform_rate_limited(
+                    &self.ctx.data.rate_limits.global_limit,
+                    &self.ctx.data.rate_limits.buckets_store,
                     $(move || {
                         Ok(
-                            self.0.data.http_client.$method(__route.as_str())
+                            ctx.data.http_client.$method(__route.as_str())
                             $(.json($json))? $(.query($query))?
                         )
                     },)?
                     $(move || {
-                        let $full_request_match = &self.0.data.http_client;
+                        let $full_request_match = &ctx.data.http_client;
                         Ok($full_request)
                     },)?
+                    reason,
                     rate_id,
                 ).await?;
                 Ok(($(_response.json::<$ty>().compat().await?)?))
@@ -104,13 +118,17 @@ macro_rules! routes {
     }
 }
 
+// TODO: Should I treat the `Modify * Position` endpoints as if they won't gain new fields?
 routes! {
+    // Gateway routes
     route get_gateway() -> GetGateway {
         request: get("/gateway"),
     }
     route get_gateway_bot() -> GetGatewayBot {
         request: get("/gateway/bot"),
     }
+
+    // TODO: Audit log
 
     // Channel routes
     route get_channel(ch: ChannelId) on ch -> Channel {
@@ -220,6 +238,130 @@ routes! {
     }
 
     // Guild routes
+    route create_guild(params: CreateGuildParams) -> Guild {
+        request: post("/guilds").json(&params),
+    }
+    route modify_guild(guild: GuildId, params: ModifyGuildParams) on guild -> Guild {
+        request: patch("/guilds/{}").json(&params),
+    }
+    route delete_guild(guild: GuildId) on guild {
+        request: delete("/guilds/{}"),
+    }
+    route get_guild_channels(guild: GuildId) on guild -> Vec<Channel> {
+        request: get("/guilds/{}/channels"),
+    }
+    route create_guild_channel(guild: GuildId, params: CreateGuildChannelParams) on guild -> Channel {
+        request: post("/guilds/{}/channels").json(&params),
+    }
+    route modify_guild_channel_position(guild: GuildId, ch: ChannelId, position: u32) on guild {
+        let params = ModifyGuildChannelPositionJsonParams {
+            id: ch,
+            position,
+        };
+        request: patch("/guilds/{}/channels").json(&params),
+    }
+    route get_guild_member(guild: GuildId, member: UserId) on guild -> Member {
+        request: get("/guilds/{}/members/{}", guild.0, member.0),
+    }
+    route list_guild_members(guild: GuildId, params: ListGuildMembersParams) on guild -> Vec<Member> {
+        request: get("/guilds/{}/members", guild.0).query(&params),
+    }
+    // TODO: Add Guild Member, requires scopes
+    route modify_guild_member(guild: GuildId, member: UserId, params: ModifyGuildMemberParams) on guild {
+        request: patch("/guilds/{}/members/{}", guild.0, member.0).json(&params),
+    }
+    route modify_current_user_nick(guild: GuildId, nick: &str) on guild {
+        let params = ModifyCurrentUserNickJsonParams { nick };
+        request: patch("/guilds/{}/members/@me/nick", guild.0).json(&params),
+    }
+    route add_guild_member_role(guild: GuildId, member: UserId, role: RoleId) on guild {
+        request: put("/guilds/{}/members/{}/roles/{}", guild.0, member.0, role.0),
+    }
+    route remove_guild_member_role(guild: GuildId, member: UserId, role: RoleId) on guild {
+        request: delete("/guilds/{}/members/{}/roles/{}", guild.0, member.0, role.0),
+    }
+    route remove_guild_member(guild: GuildId, member: UserId) on guild {
+        request: delete("/guilds/{}/members/{}", guild.0, member.0),
+    }
+    route get_guild_bans(guild: GuildId) on guild -> Vec<GuildBan> {
+        request: get("/guilds/{}/bans", guild.0),
+    }
+    route get_guild_ban(guild: GuildId, member: UserId) on guild -> GuildBan {
+        request: get("/guilds/{}/bans/{}", guild.0, member.0),
+    }
+    route create_guild_ban(guild: GuildId, member: UserId, params: CreateGuildBanParams) on guild {
+        request: put("/guilds/{}/bans/{}", guild.0, member.0).query(&params),
+    }
+    route remove_guild_ban(guild: GuildId, member: UserId) on guild {
+        request: delete("/guilds/{}/bans/{}", guild.0, member.0),
+    }
+    route get_guild_roles(guild: GuildId) on guild -> Vec<Role> {
+        request: get("/guilds/{}/roles", guild.0),
+    }
+    route create_guild_role(guild: GuildId, params: GuildRoleParams) on guild -> Role {
+        request: post("/guilds/{}/roles", guild.0).json(&params),
+    }
+    route modify_guild_role_position(guild: GuildId, role: RoleId, position: u32) on guild {
+        let params = ModifyGuildRolePositionsJsonParams {
+            id: role,
+            position,
+        };
+        request: patch("/guilds/{}/roles").json(&params),
+    }
+    route modify_guild_role(guild: GuildId, role: RoleId, params: GuildRoleParams) on guild -> Role {
+        request: patch("/guilds/{}/roles/{}", guild.0, role.0).json(&params),
+    }
+    route delete_guild_role(guild: GuildId, role: RoleId) on guild {
+        request: delete("/guilds/{}/roles/{}", guild.0, role.0),
+    }
+    route get_guild_prune_count(guild: GuildId, params: GetGuildPruneCountParams) on guild -> GuildPruneInfo {
+        request: get("/guilds/{}/prune", guild.0).query(&params),
+    }
+    route begin_guild_prune(guild: GuildId, params: BeginGuildPruneParams) on guild -> GuildPruneInfo {
+        request: post("/guilds/{}/prune", guild.0).query(&params),
+    }
+    route get_guild_voice_regions(guild: GuildId) on guild -> Vec<VoiceRegion> {
+        request: get("/guilds/{}/regions", guild.0),
+    }
+    route get_guild_invites(guild: GuildId) on guild -> Vec<InviteWithMetadata> {
+        request: get("/guilds/{}/invites", guild.0),
+    }
+    // TODO: Get Guild Integrations
+    // TODO: Create Guild Integration
+    // TODO: Modify Guild Integration
+    // TODO: Delete Guild Integration
+    // TODO: Sync Guild Integration
+    // TODO: Get Guild Embed
+    // TODO: Modify Guild Embed
+    // TODO: Get Guild Vanity URL
+    // TODO: Get Guild Widget Image
+
+    // Invite routes
+    route get_invite(invite: &str) -> Invite {
+        request: get("/invites/{}", invite),
+    }
+    route delete_invite(invite: &str) -> Invite {
+        request: delete("/invites/{}", invite),
+    }
+
+    // User routes
+    route get_current_user() -> FullUser {
+        request: get("/users/@me"),
+    }
+    route get_user(user: UserId) -> User {
+        request: get("/users/{}", user.0),
+    }
+    // TODO: Modify Current User
+    // TODO: Get Current User Guilds
+    route leave_guild(guild: GuildId) {
+        request: delete("/users/@me/guilds/{}", guild.0),
+    }
+    route get_user_dms() -> Vec<Channel> {
+        request: get("/users/@me/channels"),
+    }
+    // TODO: Create DM
+    // TODO: Create Group DM
+    // TODO: Get User Connections
 }
 
 #[derive(Serialize)]
@@ -233,4 +375,21 @@ struct EditChannelPermissionsJsonParams {
     deny: EnumSet<Permission>,
     #[serde(rename = "type")]
     overwrite_type: RawPermissionOverwriteType,
+}
+
+#[derive(Serialize)]
+struct ModifyGuildChannelPositionJsonParams {
+    id: ChannelId,
+    position: u32,
+}
+
+#[derive(Serialize)]
+struct ModifyCurrentUserNickJsonParams<'a> {
+    nick: &'a str,
+}
+
+#[derive(Serialize)]
+struct ModifyGuildRolePositionsJsonParams {
+    id: RoleId,
+    position: u32,
 }

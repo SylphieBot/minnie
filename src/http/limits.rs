@@ -195,8 +195,14 @@ enum ResponseStatus {
     RateLimited(Option<RateLimitHeaders>, Duration),
     GloballyRateLimited(Duration),
 }
-async fn check_response(request: RequestBuilder) -> Result<ResponseStatus> {
-    let request = request.header("X-RateLimit-Precision", "millisecond");
+async fn check_response(
+    request: RequestBuilder,
+    reason: &Option<String>,
+) -> Result<ResponseStatus> {
+    let mut request = request.header("X-RateLimit-Precision", "millisecond");
+    if let Some(reason) = &reason {
+        request = request.header("X-Audit-Log-Reason", reason);
+    }
     let mut response = request.send().compat().await?;
     if response.status().is_success() {
         let rate_info = parse_headers(&response)?;
@@ -235,17 +241,23 @@ impl RateLimitStore {
     }
 }
 
+struct RateLimitRouteData {
+    bucket: String,
+    limit: Arc<Mutex<HashMap<Snowflake, RawRateLimit>>>,
+}
+
 #[derive(Default)]
 pub struct RateLimitRoute {
-    bucket: Mutex<String>, // for debugging purposes
-    data: Mutex<Option<Arc<Mutex<HashMap<Snowflake, RawRateLimit>>>>>,
+    data: Mutex<Option<RateLimitRouteData>>,
 }
 impl RateLimitRoute {
     async fn check_wait(&self, global_limit: &GlobalLimit, id: Snowflake) {
         loop {
             if check_global_wait(global_limit).await { continue }
             let fut = self.data.lock().as_ref().map(|routes| {
-                check_route_wait(routes.lock().entry(id).or_insert(RawRateLimit::NoLimitAvailable))
+                check_route_wait(
+                    routes.limit.lock().entry(id).or_insert(RawRateLimit::NoLimitAvailable),
+                )
             });
             if let Some(fut) = fut {
                 if fut.await { continue }
@@ -261,13 +273,18 @@ impl RateLimitRoute {
     ) {
         if let Some(limits) = limits {
             let mut data = self.data.lock();
-            if data.is_none() {
-                *data = Some(store.get_bucket(limits.bucket.clone()));
-                *self.bucket.lock() = limits.bucket.clone();
+            if data.as_ref().map_or(true, |x| x.bucket == limits.bucket) {
+                *data = Some(RateLimitRouteData {
+                    bucket: limits.bucket.clone(),
+                    limit: store.get_bucket(limits.bucket.clone()),
+                });
             }
-            let mut routes = data.as_ref().unwrap().lock();
+            let mut routes = data.as_ref().unwrap().limit.lock();
             let limit = routes.entry(id).or_insert(RawRateLimit::NoLimitAvailable);
             limit.push_rate_limit(limits);
+        } else {
+            let mut data = self.data.lock();
+            *data = None;
         }
     }
 
@@ -276,11 +293,12 @@ impl RateLimitRoute {
         global_limit: &GlobalLimit,
         store: &RateLimitStore,
         make_request: impl Fn() -> Result<RequestBuilder>,
+        reason: Option<String>,
         id: Snowflake,
     ) -> Result<Response> {
         loop {
             self.check_wait(global_limit, id).await;
-            match check_response(make_request()?).await? {
+            match check_response(make_request()?, &reason).await? {
                 ResponseStatus::Success(rate_limit, response) => {
                     self.push_rate_info(rate_limit, store, id);
                     return Ok(response)
@@ -300,13 +318,14 @@ impl RateLimitRoute {
 }
 impl fmt::Debug for RateLimitRoute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let lock = self.bucket.lock();
         f.write_str("RateLimit(")?;
-        if lock.is_empty() {
+        let lock = self.data.lock();
+        if lock.is_none() {
             f.write_str("<none>")?;
         } else {
-            lock.fmt(f)?;
+            lock.as_ref().unwrap().bucket.fmt(f)?;
         }
+        drop(lock);
         f.write_str(")")
     }
 }

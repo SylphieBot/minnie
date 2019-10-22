@@ -1,6 +1,6 @@
 //! Types used to interact with the Discord API.
 
-// TODO: Add documentation for each field of a Discord message.
+// TODO: Add documentation for individual fields in the model.
 
 pub mod channel;
 pub mod event;

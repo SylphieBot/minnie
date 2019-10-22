@@ -13,6 +13,7 @@ base64 = "0.10.1"
 chrono = { version = "0.4", features = ["serde"] }
 crossbeam-channel = "0.3"
 derivative = "1.0.2"
+derive_builder = "0.8.0"
 enumset = { version = "0.4.0", features = ["serde", "nightly"] }
 failure = "0.1.5"
 futures01 = { package = "futures", version = "0.1.21", features = ["nightly"] }
@@ -35,7 +36,7 @@ tokio-rustls = "0.10"
 twox-hash = "1.5"
 url = "1.7.2"
 webpki = "0.21"
-webpki-roots = "0.17"
+webpki-roots = "0.18"
 websocket = { version = "0.23.0", default-features = false, features = ["async", "nightly"] }
 
 [dev-dependencies]

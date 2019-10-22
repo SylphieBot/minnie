@@ -48,12 +48,12 @@ pub enum Permission {
     ManageEmojis = 30,
 }
 
-/// An type containing a a client token.
+/// An type containing a bot or OAuth Bearer token.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct DiscordToken(Arc<str>);
 impl DiscordToken {
-    fn from_string(tok: String) -> Result<DiscordToken> {
+    fn from_bot_string(tok: String) -> Result<DiscordToken> {
         let has_bot = tok.starts_with("Bot ");
 
         let tok_data = if has_bot { &tok[4..] } else { &tok };
@@ -72,8 +72,15 @@ impl DiscordToken {
         Ok(DiscordToken(if has_bot { tok.into() } else { format!("Bot {}", tok).into() }))
     }
     pub fn new(tok: impl ToString) -> Result<DiscordToken> {
-        Self::from_string(tok.to_string())
+        Self::from_bot_string(tok.to_string())
     }
+
+    pub fn from_bearer(tok: impl ToString) -> Result<DiscordToken> {
+        let tok = tok.to_string();
+        ensure!(tok.starts_with("Bearer "), InvalidBotToken, "Invalid Bearer token.");
+        Ok(DiscordToken(tok.into()))
+    }
+
     pub fn to_header_value(&self) -> HeaderValue {
         let mut val = HeaderValue::from_str(&self.0).expect("Could not encode token as header?");
         val.set_sensitive(true);
