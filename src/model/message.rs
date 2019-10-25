@@ -1,12 +1,14 @@
 //! Types related to Discord messages.
 
 use chrono::{DateTime, Utc};
+use crate::errors::*;
 use crate::model::channel::*;
 use crate::model::types::*;
 use crate::model::guild::*;
 use crate::model::user::*;
 use crate::serde::*;
 use std::borrow::Cow;
+use std::fmt;
 
 /// A channel mentioned in a message.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
@@ -215,6 +217,55 @@ pub enum MessageFlag {
     SuppressEmbeds = 2,
 }
 
+/// A message nonce.
+#[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub enum MessageNonce {
+	Snowflake(Snowflake),
+	String(String),
+}
+impl Serialize for MessageNonce {
+	fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+		match self {
+			MessageNonce::Snowflake(v) => v.serialize(serializer),
+			MessageNonce::String(v) => v.serialize(serializer),
+		}
+	}
+}
+impl <'de> Deserialize<'de> for MessageNonce {
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_any(NonceVisitor)
+    }
+}
+struct NonceVisitor;
+impl <'de> Visitor<'de> for NonceVisitor {
+    type Value = MessageNonce;
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("snowflake")
+    }
+    fn visit_str<E>(self, v: &str) -> StdResult<MessageNonce, E> where E: DeError {
+		match v.parse::<u64>() {
+			Ok(i) => Ok(i.into()),
+			Err(_) => Ok(v.to_string().into()),
+		}
+    }
+    snowflake_visitor_common!(MessageNonce);
+}
+impl From<u64> for MessageNonce {
+	fn from(i: u64) -> Self {
+		MessageNonce::Snowflake(i.into())
+	}
+}
+impl From<Snowflake> for MessageNonce {
+	fn from(s: Snowflake) -> Self {
+		MessageNonce::Snowflake(s)
+	}
+}
+impl From<String> for MessageNonce {
+	fn from(s: String) -> Self {
+		MessageNonce::String(s)
+	}
+}
+
 /// Information related to a message in a channel.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
@@ -240,7 +291,7 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<Reaction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub nonce: Option<Snowflake>,
+    pub nonce: Option<MessageNonce>,
 	pub pinned: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
 	pub webhook_id: Option<WebhookId>,

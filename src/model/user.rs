@@ -11,12 +11,44 @@ use std::time::SystemTime;
 ///
 /// Although this contains an `u16`, the contents should be treated as a 4 character string
 /// rather than as a number.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[serde(transparent)]
-pub struct Discriminator(#[serde(with = "utils::discriminator")] pub u16);
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct Discriminator(pub u16);
 impl fmt::Display for Discriminator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:04}", self.0)
+    }
+}
+impl Serialize for Discriminator {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let id_str = format!("#{:04}", *self);
+        id_str.serialize(serializer)
+    }
+}
+impl <'de> Deserialize<'de> for Discriminator {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_str(DiscriminatorVisitor)
+    }
+}
+struct DiscriminatorVisitor;
+impl <'de> Visitor<'de> for DiscriminatorVisitor {
+    type Value = Discriminator;
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("discriminator")
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Discriminator, E> where E: DeError {
+        if v.is_empty() {
+            return Err(E::custom("discriminator is empty"))
+        }
+        let v = if v.starts_with('#') {
+            &v[1..]
+        } else {
+            v
+        };
+        v.parse().map(Discriminator).map_err(|_| E::custom("could not parse discriminator"))
+    }
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Discriminator, E> where E: DeError {
+        self.visit_str(::std::str::from_utf8(v)
+            .map_err(|_| E::custom("could not parse discriminator as utf-8"))?)
     }
 }
 

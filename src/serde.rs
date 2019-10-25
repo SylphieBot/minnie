@@ -16,9 +16,44 @@ pub use serde_repr::*;
 pub use serde_json::{self, Value as JsonValue};
 pub use strum_macros::*;
 
+macro_rules! snowflake_visitor_common {
+    ($ty:ty) => {
+        fn visit_i64<E>(self, v: i64) -> ::std::result::Result<$ty, E> where E: DeError {
+            if v < 0 {
+                Err(E::custom("ids cannot be negative"))
+            } else {
+                Ok((v as u64).into())
+            }
+        }
+        fn visit_u64<E>(self, v: u64) -> ::std::result::Result<$ty, E> where E: DeError {
+            Ok(v.into())
+        }
+
+        fn visit_i128<E>(self, v: i128) -> ::std::result::Result<$ty, E> where E: DeError {
+            if v < 0 {
+                Err(E::custom("snowflakes cannot be negative"))
+            } else if v > u64::max_value() as i128 {
+                Err(E::custom("snowflakes must be u64"))
+            } else {
+                Ok((v as u64).into())
+            }
+        }
+        fn visit_u128<E>(self, v: u128) -> ::std::result::Result<$ty, E> where E: DeError {
+            if v > u64::max_value() as u128 {
+                Err(E::custom("snowflakes must be u64"))
+            } else {
+                Ok((v as u64).into())
+            }
+        }
+        fn visit_bytes<E>(self, v: &[u8]) -> ::std::result::Result<$ty, E> where E: DeError {
+            self.visit_str(::std::str::from_utf8(v)
+                .map_err(|_| E::custom("could not parse snowflake string as utf-8"))?)
+        }
+    }
+}
+
 pub mod utils {
     use super::*;
-    use std::fmt::{Formatter, Result as FmtResult};
     use std::time::{UNIX_EPOCH, SystemTime, Duration};
 
     pub fn if_false(b: &bool) -> bool {
@@ -71,100 +106,6 @@ pub mod utils {
         }
         pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, D::Error> {
             Ok(Duration::from_secs(u64::deserialize(d)?))
-        }
-    }
-
-    pub mod snowflake {
-        use super::*;
-
-        pub fn serialize<S: Serializer>(t: &u64, s: S) -> Result<S::Ok, S::Error> {
-            let id_str = t.to_string();
-            id_str.serialize(s)
-        }
-
-        struct DeserializeVisiter;
-        impl <'de> Visitor<'de> for DeserializeVisiter {
-            type Value = u64;
-            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-                formatter.write_str("snowflake")
-            }
-
-            fn visit_i64<E>(self, v: i64) -> Result<u64, E> where E: DeError {
-                if v < 0 {
-                    Err(E::custom("ids cannot be negative"))
-                } else {
-                    Ok(v as u64)
-                }
-            }
-            fn visit_u64<E>(self, v: u64) -> Result<u64, E> where E: DeError {
-                Ok(v)
-            }
-
-            fn visit_i128<E>(self, v: i128) -> Result<u64, E> where E: DeError {
-                if v < 0 {
-                    Err(E::custom("snowflakes cannot be negative"))
-                } else if v > u64::max_value() as i128 {
-                    Err(E::custom("snowflakes must be u64"))
-                } else {
-                    Ok(v as u64)
-                }
-            }
-            fn visit_u128<E>(self, v: u128) -> Result<u64, E> where E: DeError {
-                if v > u64::max_value() as u128 {
-                    Err(E::custom("snowflakes must be u64"))
-                } else {
-                    Ok(v as u64)
-                }
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<u64, E> where E: DeError {
-                v.parse().map_err(|_| E::custom("could not parse snowflake"))
-            }
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<u64, E> where E: DeError {
-                self.visit_str(::std::str::from_utf8(v)
-                    .map_err(|_| E::custom("could not parse snowflake string as utf-8"))?)
-            }
-
-        }
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
-            d.deserialize_any(DeserializeVisiter)
-        }
-    }
-
-    pub mod discriminator {
-        use super::*;
-
-        pub fn serialize<S: Serializer>(t: &u16, s: S) -> Result<S::Ok, S::Error> {
-            let id_str = format!("#{:04}", *t);
-            id_str.serialize(s)
-        }
-
-        struct DeserializeVisiter;
-        impl <'de> Visitor<'de> for DeserializeVisiter {
-            type Value = u16;
-            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-                formatter.write_str("discriminator")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<u16, E> where E: DeError {
-                if v.is_empty() {
-                    return Err(E::custom("discriminator is empty"))
-                }
-                let v = if v.starts_with('#') {
-                    &v[1..]
-                } else {
-                    v
-                };
-                v.parse().map_err(|_| E::custom("could not parse discriminator"))
-            }
-            fn visit_bytes<E>(self, v: &[u8]) -> Result<u16, E> where E: DeError {
-                self.visit_str(::std::str::from_utf8(v)
-                    .map_err(|_| E::custom("could not parse snowflake discriminator as utf-8"))?)
-            }
-
-        }
-        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<u16, D::Error> {
-            d.deserialize_any(DeserializeVisiter)
         }
     }
 

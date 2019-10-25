@@ -102,9 +102,31 @@ impl From<DiscordToken> for Arc<str> {
 }
 
 /// An untyped Discord snowflake used for IDs and some related things.
-#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-#[serde(transparent)]
-pub struct Snowflake(#[serde(with = "utils::snowflake")] pub u64);
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct Snowflake(pub u64);
+impl Serialize for Snowflake {
+    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+        let id_str = self.0.to_string();
+        id_str.serialize(serializer)
+    }
+}
+impl <'de> Deserialize<'de> for Snowflake {
+    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+        deserializer.deserialize_any(SnowflakeVisitor)
+    }
+}
+struct SnowflakeVisitor;
+impl <'de> Visitor<'de> for SnowflakeVisitor {
+    type Value = Snowflake;
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("snowflake")
+    }
+    fn visit_str<E>(self, v: &str) -> StdResult<Snowflake, E> where E: DeError {
+        v.parse::<u64>().map(Snowflake).map_err(|_| E::custom("could not parse snowflake"))
+    }
+    snowflake_visitor_common!(Snowflake);
+}
+
 impl fmt::Debug for Snowflake {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0, f)

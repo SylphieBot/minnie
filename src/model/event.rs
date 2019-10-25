@@ -171,7 +171,7 @@ pub struct MessageUpdateEvent {
     pub attachments: Option<Vec<Attachment>>,
 	pub embeds: Option<Vec<Embed>>,
     pub reactions: Option<Vec<Reaction>>,
-    pub nonce: Option<Snowflake>,
+    pub nonce: Option<MessageNonce>,
 	pub pinned: Option<bool>,
 	pub webhook_id: Option<WebhookId>,
     #[serde(rename = "type")]
@@ -244,6 +244,11 @@ pub(crate) struct MalformedPresenceUpdateEvent {
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
 pub struct PresenceUpdateEvent(pub Presence);
+
+/// A `Presences Replace` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[serde(transparent)]
+pub struct PresencesReplaceEvent(pub Vec<Presence>);
 
 /// A `Ready` event.
 #[serde_with::skip_serializing_none]
@@ -370,6 +375,7 @@ pub enum GatewayEventType {
     MessageReactionRemove,
     MessageReactionRemoveAll,
     PresenceUpdate,
+    PresencesReplace,
     Ready,
     Resumed,
     TypingStart,
