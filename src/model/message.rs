@@ -38,22 +38,22 @@ pub struct Attachment {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct Embed {
-	pub title: Option<Cow<'static, str>>,
+pub struct Embed<'a> {
+	pub title: Option<Cow<'a, str>>,
     #[serde(rename = "type")]
 	pub embed_type: Option<EmbedType>,
-	pub description: Option<Cow<'static, str>>,
-	pub url: Option<Cow<'static, str>>,
+	pub description: Option<Cow<'a, str>>,
+	pub url: Option<Cow<'a, str>>,
 	pub timestamp: Option<DateTime<Utc>>,
-	pub color: Option<u32>,
-	pub footer: Option<EmbedFooter>,
-	pub image: Option<EmbedImage>,
-	pub thumbnail: Option<EmbedImage>,
-	pub video: Option<EmbedVideo>,
-	pub provider: Option<EmbedProvider>,
-	pub author: Option<EmbedAuthor>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub fields: Vec<EmbedField>,
+	pub color: Option<Color>,
+	pub footer: Option<EmbedFooter<'a>>,
+	pub image: Option<EmbedImage<'a>>,
+	pub thumbnail: Option<EmbedImage<'a>>,
+	pub video: Option<EmbedVideo<'a>>,
+	pub provider: Option<EmbedProvider<'a>>,
+	pub author: Option<EmbedAuthor<'a>>,
+    #[serde(default, skip_serializing_if = "utils::cow_is_empty")]
+	pub fields: Cow<'a, [EmbedField<'a>]>,
 }
 
 /// The type of a message embed.
@@ -73,9 +73,9 @@ pub enum EmbedType {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct EmbedFooter {
-	pub name: Cow<'static, str>,
-	pub value: Option<Cow<'static, str>>,
+pub struct EmbedFooter<'a> {
+	pub name: Cow<'a, str>,
+	pub value: Option<Cow<'a, str>>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
 	pub inline: bool,
 }
@@ -84,9 +84,9 @@ pub struct EmbedFooter {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct EmbedImage {
-	pub url: Option<Cow<'static, str>>,
-	pub proxy_url: Option<Cow<'static, str>>,
+pub struct EmbedImage<'a> {
+	pub url: Option<Cow<'a, str>>,
+	pub proxy_url: Option<Cow<'a, str>>,
 	pub height: Option<u32>,
 	pub width: Option<u32>,
 }
@@ -95,8 +95,8 @@ pub struct EmbedImage {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct EmbedVideo {
-	pub url: Option<Cow<'static, str>>,
+pub struct EmbedVideo<'a> {
+	pub url: Option<Cow<'a, str>>,
 	pub height: Option<u32>,
 	pub width: Option<u32>,
 }
@@ -105,28 +105,28 @@ pub struct EmbedVideo {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct EmbedProvider {
-	pub name: Option<Cow<'static, str>>,
-	pub url: Option<Cow<'static, str>>,
+pub struct EmbedProvider<'a> {
+	pub name: Option<Cow<'a, str>>,
+	pub url: Option<Cow<'a, str>>,
 }
 
 /// The author of a message embed.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct EmbedAuthor {
-	pub name: Option<Cow<'static, str>>,
-	pub url: Option<Cow<'static, str>>,
-	pub icon_url: Option<Cow<'static, str>>,
-	pub proxy_icon_url: Option<Cow<'static, str>>,
+pub struct EmbedAuthor<'a> {
+	pub name: Option<Cow<'a, str>>,
+	pub url: Option<Cow<'a, str>>,
+	pub icon_url: Option<Cow<'a, str>>,
+	pub proxy_icon_url: Option<Cow<'a, str>>,
 }
 
 /// An field in a message embed.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[non_exhaustive]
-pub struct EmbedField {
-	pub name: Cow<'static, str>,
-	pub value: Cow<'static, str>,
+pub struct EmbedField<'a> {
+	pub name: Cow<'a, str>,
+	pub value: Cow<'a, str>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
 	pub inline: bool,
 }
@@ -287,7 +287,7 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mention_channels: Vec<MentionChannel>,
     pub attachments: Vec<Attachment>,
-	pub embeds: Vec<Embed>,
+	pub embeds: Vec<Embed<'static>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<Reaction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

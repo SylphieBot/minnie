@@ -134,7 +134,7 @@ routes! {
     route get_channel(ch: ChannelId) on ch -> Channel {
         request: get("/channels/{}", ch.0),
     }
-    route modify_channel(ch: ChannelId, model: ModifyChannelParams) on ch -> Channel {
+    route modify_channel(ch: ChannelId, model: ModifyChannelParams<'a>) on ch -> Channel {
         request: patch("/channels/{}", ch.0).json(&model),
     }
     route delete_channel(ch: ChannelId) on ch -> Channel {
@@ -146,7 +146,7 @@ routes! {
     route get_channel_message(ch: ChannelId, msg: MessageId) on ch -> Message {
         request: get("/channels/{}/messages/{}", ch.0, msg.0),
     }
-    route create_message(ch: ChannelId, msg: CreateMessageParams, files: Vec<CreateMessageFile>) on ch -> Message {
+    route create_message(ch: ChannelId, msg: CreateMessageParams<'a>, files: Vec<CreateMessageFile<'a>>) on ch -> Message {
         let route = route!("/channels/{}/messages", ch.0);
         full_request: |r| {
             let mut form = Form::new();
@@ -176,13 +176,13 @@ routes! {
     route delete_all_reactions(ch: ChannelId, msg: MessageId, emoji: &EmojiRef) on ch {
         request: delete("/channels/{}/messages/{}/reactions/{}", ch.0, msg.0, emoji),
     }
-    route edit_message(ch: ChannelId, msg: MessageId, params: EditMessageParams) on ch -> Message {
+    route edit_message(ch: ChannelId, msg: MessageId, params: EditMessageParams<'a>) on ch -> Message {
         request: patch("/channels/{}/messages/{}", ch.0, msg.0).json(&params),
     }
     route delete_message(ch: ChannelId, msg: MessageId) on ch {
         request: delete("/channels/{}/messages/{}", ch.0, msg.0),
     }
-    route bulk_delete_message(ch: ChannelId, messages: Vec<MessageId>) on ch {
+    route bulk_delete_message(ch: ChannelId, messages: &[MessageId]) on ch {
         let params = BulkDeleteMessagesJsonParams { messages };
         request: post("/channels/{}/messages/bulk-delete", ch.0).json(&params),
     }
@@ -227,10 +227,10 @@ routes! {
     route get_guild_emoji(guild: GuildId, id: EmojiId) on guild -> Emoji {
         request: get("/guilds/{}/emojis/{}", guild.0, id.0),
     }
-    route create_guild_emoji(guild: GuildId, params: CreateGuildEmojiParams) on guild -> Emoji {
+    route create_guild_emoji(guild: GuildId, params: CreateGuildEmojiParams<'a>) on guild -> Emoji {
         request: post("/guilds/{}/emojis").json(&params),
     }
-    route modify_guild_emoji(guild: GuildId, id: EmojiId, params: ModifyGuildEmojiParams) on guild -> Emoji {
+    route modify_guild_emoji(guild: GuildId, id: EmojiId, params: ModifyGuildEmojiParams<'a>) on guild -> Emoji {
         request: patch("/guilds/{}/emojis/{}", guild.0, id.0).json(&params),
     }
     route delete_guild_emoji(guild: GuildId, id: EmojiId) on guild {
@@ -238,10 +238,10 @@ routes! {
     }
 
     // Guild routes
-    route create_guild(params: CreateGuildParams) -> Guild {
+    route create_guild(params: CreateGuildParams<'a>) -> Guild {
         request: post("/guilds").json(&params),
     }
-    route modify_guild(guild: GuildId, params: ModifyGuildParams) on guild -> Guild {
+    route modify_guild(guild: GuildId, params: ModifyGuildParams<'a>) on guild -> Guild {
         request: patch("/guilds/{}").json(&params),
     }
     route delete_guild(guild: GuildId) on guild {
@@ -250,7 +250,7 @@ routes! {
     route get_guild_channels(guild: GuildId) on guild -> Vec<Channel> {
         request: get("/guilds/{}/channels"),
     }
-    route create_guild_channel(guild: GuildId, params: CreateGuildChannelParams) on guild -> Channel {
+    route create_guild_channel(guild: GuildId, params: CreateGuildChannelParams<'a>) on guild -> Channel {
         request: post("/guilds/{}/channels").json(&params),
     }
     route modify_guild_channel_position(guild: GuildId, ch: ChannelId, position: u32) on guild {
@@ -267,7 +267,7 @@ routes! {
         request: get("/guilds/{}/members", guild.0).query(&params),
     }
     // TODO: Add Guild Member, requires scopes
-    route modify_guild_member(guild: GuildId, member: UserId, params: ModifyGuildMemberParams) on guild {
+    route modify_guild_member(guild: GuildId, member: UserId, params: ModifyGuildMemberParams<'a>) on guild {
         request: patch("/guilds/{}/members/{}", guild.0, member.0).json(&params),
     }
     route modify_current_user_nick(guild: GuildId, nick: &str) on guild {
@@ -289,7 +289,7 @@ routes! {
     route get_guild_ban(guild: GuildId, member: UserId) on guild -> GuildBan {
         request: get("/guilds/{}/bans/{}", guild.0, member.0),
     }
-    route create_guild_ban(guild: GuildId, member: UserId, params: CreateGuildBanParams) on guild {
+    route create_guild_ban(guild: GuildId, member: UserId, params: CreateGuildBanParams<'a>) on guild {
         request: put("/guilds/{}/bans/{}", guild.0, member.0).query(&params),
     }
     route remove_guild_ban(guild: GuildId, member: UserId) on guild {
@@ -298,7 +298,7 @@ routes! {
     route get_guild_roles(guild: GuildId) on guild -> Vec<Role> {
         request: get("/guilds/{}/roles", guild.0),
     }
-    route create_guild_role(guild: GuildId, params: GuildRoleParams) on guild -> Role {
+    route create_guild_role(guild: GuildId, params: GuildRoleParams<'a>) on guild -> Role {
         request: post("/guilds/{}/roles", guild.0).json(&params),
     }
     route modify_guild_role_position(guild: GuildId, role: RoleId, position: u32) on guild {
@@ -308,7 +308,7 @@ routes! {
         };
         request: patch("/guilds/{}/roles").json(&params),
     }
-    route modify_guild_role(guild: GuildId, role: RoleId, params: GuildRoleParams) on guild -> Role {
+    route modify_guild_role(guild: GuildId, role: RoleId, params: GuildRoleParams<'a>) on guild -> Role {
         request: patch("/guilds/{}/roles/{}", guild.0, role.0).json(&params),
     }
     route delete_guild_role(guild: GuildId, role: RoleId) on guild {
@@ -365,8 +365,8 @@ routes! {
 }
 
 #[derive(Serialize)]
-struct BulkDeleteMessagesJsonParams {
-    messages: Vec<MessageId>,
+struct BulkDeleteMessagesJsonParams<'a> {
+    messages: &'a [MessageId],
 }
 
 #[derive(Serialize)]

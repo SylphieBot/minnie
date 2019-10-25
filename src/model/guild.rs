@@ -130,7 +130,7 @@ pub enum GuildFeature {
 pub struct Role {
     pub id: RoleId,
     pub name: String,
-    pub color: u32,
+    pub color: Color,
     pub hoist: bool,
     pub position: u64,
     pub permissions: EnumSet<Permission>,

@@ -184,6 +184,7 @@ pub enum ActivityType {
     Game = 0,
     Streaming = 1,
     Listening = 2,
+    CustomStatus = 4,
     #[serde(other)]
     Unknown = i32::max_value(),
 }

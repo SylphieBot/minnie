@@ -52,8 +52,64 @@ macro_rules! snowflake_visitor_common {
     }
 }
 
+macro_rules! builder_common {
+    ([$($impl_bounds:tt)*] $name:ident, $into_ty:ident) => {
+        impl $($impl_bounds)* $name $($impl_bounds)* {
+            /// Creates a new builder.
+            pub fn new() -> Self {
+                Default::default()
+            }
+        }
+        impl $($impl_bounds)* $into_ty $($impl_bounds)* {
+            /// Returns a builder for this struct.
+            pub fn builder() -> $name $($impl_bounds)* {
+                Default::default()
+            }
+        }
+    }
+}
+macro_rules! builder_common_docs {
+    ([$($rest:tt)*] $name:expr) => {
+        #[doc = "Builds a new `"] #[doc = $name] #[doc = "`."]
+        $($rest)*
+    }
+}
+macro_rules! builder_common_infallible {
+    ([$($impl_bounds:tt)*] $name:ident, $into_ty:ident) => {
+        builder_common!([$($impl_bounds)*] $name, $into_ty);
+        impl $($impl_bounds)* $name $($impl_bounds)* {
+            builder_common_docs! {[
+                pub fn build(self) -> $into_ty $($impl_bounds)* {
+                    self.build0().unwrap()
+                }
+            ] stringify!($into_ty)}
+        }
+        impl $($impl_bounds)* From<$name $($impl_bounds)*> for $into_ty $($impl_bounds)* {
+            fn from(v: $name $($impl_bounds)*) -> Self {
+                v.build()
+            }
+        }
+    }
+}
+macro_rules! builder_common_fallible {
+    ([$($impl_bounds:tt)*] $name:ident, $into_ty:ident) => {
+        builder_common!([$($impl_bounds)*] $name, $into_ty);
+        impl $($impl_bounds)* $name $($impl_bounds)* {
+            builder_common_docs! {[
+                pub fn build(self) -> Result<$into_ty $($impl_bounds)*> {
+                    match self.build0() {
+                        Ok(v) => Ok(v),
+                        Err(e) => bail!(InvalidInput, e.into()),
+                    }
+                }
+            ] stringify!($into_ty)}
+        }
+    }
+}
+
 pub mod utils {
     use super::*;
+    use std::borrow::Cow;
     use std::time::{UNIX_EPOCH, SystemTime, Duration};
 
     pub fn if_false(b: &bool) -> bool {
@@ -61,6 +117,10 @@ pub mod utils {
 }
     pub fn if_true(b: &bool) -> bool {
     *b
+    }
+
+    pub fn cow_is_empty<T>(c: &Cow<'_, [T]>) -> bool where [T]: ToOwned {
+        c.is_empty()
     }
 
     pub mod system_time_secs {

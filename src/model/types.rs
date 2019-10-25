@@ -101,6 +101,34 @@ impl From<DiscordToken> for Arc<str> {
     }
 }
 
+/// A color used in Discord messages/etc.
+///
+/// This is a sRGB color with no alpha channel. It is encoded as `0xrrggbb`.
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+#[serde(transparent)]
+pub struct Color(pub u32);
+impl Color {
+    /// Creates a new color from sRGB components.
+    pub fn new(r: u8, g: u8, b: u8) -> Color {
+        Color(((r as u32) << 16) | ((g as u32) << 8) | b as u32)
+    }
+
+    /// Returns the red channel of this color.
+    pub fn red(self) -> u8 {
+        (self.0 >> 16) as u8
+    }
+
+    /// Returns the green channel of this color.
+    pub fn green(self) -> u8 {
+        (self.0 >> 8) as u8
+    }
+
+    /// Returns the blue channel of this color.
+    pub fn blue(self) -> u8 {
+        self.0 as u8
+    }
+}
+
 /// An untyped Discord snowflake used for IDs and some related things.
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Snowflake(pub u64);

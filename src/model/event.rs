@@ -169,7 +169,7 @@ pub struct MessageUpdateEvent {
 	pub mention_roles: Option<Vec<RoleId>>,
     pub mention_channels: Option<Vec<MentionChannel>>,
     pub attachments: Option<Vec<Attachment>>,
-	pub embeds: Option<Vec<Embed>>,
+	pub embeds: Option<Vec<Embed<'static>>>,
     pub reactions: Option<Vec<Reaction>>,
     pub nonce: Option<MessageNonce>,
 	pub pinned: Option<bool>,

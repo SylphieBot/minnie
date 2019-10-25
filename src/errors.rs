@@ -25,6 +25,8 @@ pub enum ErrorKind {
     DiscordBadResponse(&'static str),
     #[fail(display = "Internal error: {}", _0)]
     InternalError(&'static str),
+    #[fail(display = "Invalid input: {}", _0)]
+    InvalidInput(Cow<'static, str>),
     #[fail(display = "{}", _0)]
     Panicked(Cow<'static, str>),
 
