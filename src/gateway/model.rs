@@ -5,29 +5,33 @@ use crate::model::event::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
+use derive_setters::*;
 use std::fmt;
 use std::marker::PhantomData;
 use std::time::{SystemTime, Duration};
 
 /// The presence the bot should be using.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct PresenceUpdate {
     #[serde(with = "utils::system_time_millis")]
     pub since: SystemTime,
-    pub game: Option<Activity>,
     pub status: UserStatus,
+
+    pub game: Option<Activity>,
+    #[setters(into)]
+    pub activities: Option<Vec<Activity>>,
+    #[setters(bool)]
     pub afk: bool,
 }
 impl PresenceUpdate {
     /// Creates a new presence with the given properties.
     pub fn new(since: SystemTime, status: UserStatus) -> PresenceUpdate {
         PresenceUpdate {
-            since,
-            game: None,
-            status,
-            afk: false,
+            since, status,
+            game: None, activities: None, afk: false,
         }
     }
 }
@@ -36,20 +40,54 @@ impl Default for PresenceUpdate {
         PresenceUpdate::new(SystemTime::now(), UserStatus::Online)
     }
 }
+impl From<UserStatus> for PresenceUpdate {
+    fn from(status: UserStatus) -> Self {
+        PresenceUpdate::new(SystemTime::now(), status)
+    }
+}
 
 /// A request to gateway for guild members.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Default, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct GuildMembersRequest {
-    pub guild_id: Vec<GuildId>,
-    pub query: String,
-    pub limit: u32,
-    #[serde(default, skip_serializing_if = "utils::if_false")]
-    pub presences: bool,
+    #[setters(rename = "guild_ids", into)]
+    pub guild_id: Option<Vec<GuildId>>,
+    #[setters(into)]
+    pub query: Option<String>,
+    pub limit: Option<u32>,
+    pub presences: Option<bool>,
+    #[setters(into)]
     pub user_ids: Option<Vec<UserId>>,
 }
-// TODO: Add constructor for a GuildMembersRequest
+impl GuildMembersRequest {
+    pub fn new(guild: GuildId) -> Self {
+        GuildMembersRequest::default().guild_id(guild)
+    }
+
+    /// Adds a guild to request members from.
+    ///
+    /// See [`guild_id`](`#structfield.guild_id`).
+    pub fn guild_id(mut self, id: GuildId) -> Self {
+        self.guild_id.push(id);
+        self
+    }
+
+    /// Adds a user to request information about.
+    ///
+    /// See [`user_ids`](`#structfield.user_ids`).
+    pub fn user_id(mut self, id: UserId) -> Self {
+        self.user_ids.push(id);
+        self
+    }
+}
+impl From<GuildId> for GuildMembersRequest {
+    fn from(id: GuildId) -> Self {
+        GuildMembersRequest::new(id)
+    }
+}
 
 /// The connection properties used for the `Identify` packet.
 #[derive(Serialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

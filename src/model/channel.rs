@@ -6,6 +6,7 @@ use crate::model::types::*;
 use crate::model::guild::*;
 use crate::model::user::*;
 use crate::serde::*;
+use derive_setters::*;
 use std::time::Duration;
 
 /// The type of an channel.
@@ -50,9 +51,12 @@ struct RawPermissionOverwrite {
     deny: EnumSet<Permission>,
 }
 
+/// Who a permission overwrite is applied to.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub enum PermissionOverwriteId {
+    /// The permission overwrite is for a particular user.
     Member(UserId),
+    /// The permission overwrite is for any user in a particular group.
     Role(RoleId),
 }
 impl PermissionOverwriteId {
@@ -87,10 +91,22 @@ impl From<RoleId> for PermissionOverwriteId {
 
 /// A permission overwrite in a channel.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[non_exhaustive]
 pub struct PermissionOverwrite {
     pub id: PermissionOverwriteId,
     pub allow: EnumSet<Permission>,
     pub deny: EnumSet<Permission>,
+}
+impl PermissionOverwrite {
+    pub fn new(
+        id: impl Into<PermissionOverwriteId>,
+        allow: impl Into<EnumSet<Permission>>, deny: impl Into<EnumSet<Permission>>,
+    ) -> Self {
+        PermissionOverwrite {
+            id: id.into(), allow: allow.into(), deny: deny.into(),
+        }
+    }
 }
 
 impl From<PermissionOverwrite> for RawPermissionOverwrite {

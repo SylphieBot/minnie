@@ -140,7 +140,7 @@ routes! {
     route delete_channel(ch: ChannelId) on ch -> Channel {
         request: delete("/channels/{}", ch.0),
     }
-    route get_channel_messages(ch: ChannelId, params: GetChannelMessagesParams) on ch -> Vec<Message> {
+    route get_channel_messages(ch: ChannelId, params: GetChannelMessagesParams<'a>) on ch -> Vec<Message> {
         request: get("/channels/{}/messages", ch.0).query(&params),
     }
     route get_channel_message(ch: ChannelId, msg: MessageId) on ch -> Message {
@@ -170,7 +170,7 @@ routes! {
     route delete_user_reaction(ch: ChannelId, msg: MessageId, emoji: &EmojiRef, user: UserId) on ch {
         request: delete("/channels/{}/messages/{}/reactions/{}/{}", ch.0, msg.0, emoji, user.0),
     }
-    route get_reactions(ch: ChannelId, msg: MessageId, emoji: &EmojiRef, params: GetReactionsParams) on ch -> Vec<User> {
+    route get_reactions(ch: ChannelId, msg: MessageId, emoji: &EmojiRef, params: GetReactionsParams<'a>) on ch -> Vec<User> {
         request: get("/channels/{}/messages/{}/reactions/{}", ch.0, msg.0, emoji).query(&params),
     }
     route delete_all_reactions(ch: ChannelId, msg: MessageId, emoji: &EmojiRef) on ch {
@@ -186,7 +186,7 @@ routes! {
         let params = BulkDeleteMessagesJsonParams { messages };
         request: post("/channels/{}/messages/bulk-delete", ch.0).json(&params),
     }
-    route edit_channel_permissions(ch: ChannelId, id: PermissionOverwriteId, params: EditChannelPermissionsParams) on ch {
+    route edit_channel_permissions(ch: ChannelId, id: PermissionOverwriteId, params: EditChannelPermissionsParams<'a>) on ch {
         let params = EditChannelPermissionsJsonParams {
             allow: params.allow,
             deny: params.deny,
@@ -198,7 +198,7 @@ routes! {
     route get_channel_invites(ch: ChannelId) on ch -> Vec<InviteWithMetadata> {
         request: get("/channels/{}/invites", ch.0),
     }
-    route create_channel_invite(ch: ChannelId, params: CreateChannelInviteParams) on ch -> Invite {
+    route create_channel_invite(ch: ChannelId, params: CreateChannelInviteParams<'a>) on ch -> Invite {
         request: post("/channels/{}/invites", ch.0).json(&params),
     }
     route delete_channel_permission(ch: ChannelId, id: PermissionOverwriteId) on ch {
@@ -263,7 +263,7 @@ routes! {
     route get_guild_member(guild: GuildId, member: UserId) on guild -> Member {
         request: get("/guilds/{}/members/{}", guild.0, member.0),
     }
-    route list_guild_members(guild: GuildId, params: ListGuildMembersParams) on guild -> Vec<Member> {
+    route list_guild_members(guild: GuildId, params: ListGuildMembersParams<'a>) on guild -> Vec<Member> {
         request: get("/guilds/{}/members", guild.0).query(&params),
     }
     // TODO: Add Guild Member, requires scopes
@@ -314,10 +314,10 @@ routes! {
     route delete_guild_role(guild: GuildId, role: RoleId) on guild {
         request: delete("/guilds/{}/roles/{}", guild.0, role.0),
     }
-    route get_guild_prune_count(guild: GuildId, params: GetGuildPruneCountParams) on guild -> GuildPruneInfo {
+    route get_guild_prune_count(guild: GuildId, params: GetGuildPruneCountParams<'a>) on guild -> GuildPruneInfo {
         request: get("/guilds/{}/prune", guild.0).query(&params),
     }
-    route begin_guild_prune(guild: GuildId, params: BeginGuildPruneParams) on guild -> GuildPruneInfo {
+    route begin_guild_prune(guild: GuildId, params: BeginGuildPruneParams<'a>) on guild -> GuildPruneInfo {
         request: post("/guilds/{}/prune", guild.0).query(&params),
     }
     route get_guild_voice_regions(guild: GuildId) on guild -> Vec<VoiceRegion> {

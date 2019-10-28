@@ -7,6 +7,7 @@ use crate::model::types::*;
 use crate::model::guild::*;
 use crate::model::user::*;
 use crate::serde::*;
+use derive_setters::*;
 use std::borrow::Cow;
 use std::fmt;
 
@@ -37,23 +38,56 @@ pub struct Attachment {
 /// An embed attached to a message.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct Embed<'a> {
+	#[setters(into)]
 	pub title: Option<Cow<'a, str>>,
     #[serde(rename = "type")]
+	#[setters(skip)]
 	pub embed_type: Option<EmbedType>,
+	#[setters(into)]
 	pub description: Option<Cow<'a, str>>,
+	#[setters(into)]
 	pub url: Option<Cow<'a, str>>,
+	#[setters(into)]
 	pub timestamp: Option<DateTime<Utc>>,
+	#[setters(into)]
 	pub color: Option<Color>,
+	#[setters(into)]
 	pub footer: Option<EmbedFooter<'a>>,
+	#[setters(into)]
 	pub image: Option<EmbedImage<'a>>,
+	#[setters(into)]
 	pub thumbnail: Option<EmbedImage<'a>>,
+	#[setters(skip)]
 	pub video: Option<EmbedVideo<'a>>,
+	#[setters(skip)]
 	pub provider: Option<EmbedProvider<'a>>,
+	#[setters(into)]
 	pub author: Option<EmbedAuthor<'a>>,
     #[serde(default, skip_serializing_if = "utils::cow_is_empty")]
+	#[setters(into)]
 	pub fields: Cow<'a, [EmbedField<'a>]>,
+}
+new_from_default!(Embed);
+impl <'a> Embed<'a> {
+	/// Adds a new field to the embed.
+	pub fn field(
+		mut self, name: impl Into<Cow<'a, str>>, value: impl Into<Cow<'a, str>>,
+	) -> Self {
+		self.fields.to_mut().push(EmbedField::new(name, value));
+		self
+	}
+
+	/// Adds a new inline field to the embed.
+	pub fn inline_field(
+		mut self, name: impl Into<Cow<'a, str>>, value: impl Into<Cow<'a, str>>,
+	) -> Self {
+		self.fields.to_mut().push(EmbedField::new(name, value).inline());
+		self
+	}
 }
 
 /// The type of a message embed.
@@ -69,27 +103,65 @@ pub enum EmbedType {
 	Other,
 }
 
+macro_rules! new_from_str {
+	(@one $lt:tt, $name:ident, $ty:ty) => {
+		impl <$lt> From<$ty> for $name<$lt> {
+			fn from(value: $ty) -> Self {
+				$name::new(value)
+			}
+		}
+	};
+	($name:ident) => {
+		new_from_str!(@one 'a, $name, &'a str);
+		new_from_str!(@one 'a, $name, String);
+	};
+}
+
 /// The footer of a message embed.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct EmbedFooter<'a> {
+	#[setters(into)]
 	pub name: Cow<'a, str>,
-	pub value: Option<Cow<'a, str>>,
-    #[serde(default, skip_serializing_if = "utils::if_false")]
-	pub inline: bool,
+	#[setters(into)]
+	pub icon_url: Option<Cow<'a, str>>,
+	#[setters(skip)]
+	pub proxy_icon_url: Option<Cow<'a, str>>,
 }
+impl <'a> EmbedFooter<'a> {
+	pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
+		EmbedFooter {
+			name: name.into(), icon_url: None, proxy_icon_url: None,
+		}
+	}
+}
+new_from_str!(EmbedFooter);
 
 /// An image contained in a message embed.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct EmbedImage<'a> {
+	#[setters(into)]
 	pub url: Option<Cow<'a, str>>,
+	#[setters(skip)]
 	pub proxy_url: Option<Cow<'a, str>>,
+	#[setters(skip)]
 	pub height: Option<u32>,
+	#[setters(skip)]
 	pub width: Option<u32>,
 }
+impl <'a> EmbedImage<'a> {
+	pub fn new(url: impl Into<Cow<'a, str>>) -> Self {
+		EmbedImage::default().url(url)
+	}
+}
+new_from_str!(EmbedImage);
 
 /// A video contained in a message embed.
 #[serde_with::skip_serializing_none]
@@ -113,22 +185,46 @@ pub struct EmbedProvider<'a> {
 /// The author of a message embed.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct EmbedAuthor<'a> {
+	#[setters(into)]
 	pub name: Option<Cow<'a, str>>,
+	#[setters(into)]
 	pub url: Option<Cow<'a, str>>,
+	#[setters(into)]
 	pub icon_url: Option<Cow<'a, str>>,
+	#[setters(skip)]
 	pub proxy_icon_url: Option<Cow<'a, str>>,
 }
+impl <'a> EmbedAuthor<'a> {
+	pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
+		EmbedAuthor::default().name(name)
+	}
+}
+new_from_str!(EmbedAuthor);
 
 /// An field in a message embed.
-#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
+#[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct EmbedField<'a> {
+	#[setters(into)]
 	pub name: Cow<'a, str>,
+	#[setters(into)]
 	pub value: Cow<'a, str>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
+	#[setters(bool)]
 	pub inline: bool,
+}
+impl <'a> EmbedField<'a> {
+	pub fn new(name: impl Into<Cow<'a, str>>, value: impl Into<Cow<'a, str>>) -> Self {
+		EmbedField {
+			name: name.into(), value: value.into(), inline: false,
+		}
+	}
 }
 
 /// An reaction attached to a message.

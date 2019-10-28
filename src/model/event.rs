@@ -105,10 +105,10 @@ pub struct GuildMemberUpdateEvent {
 #[non_exhaustive]
 pub struct GuildMembersChunkEvent {
     pub guild_id: GuildId,
-    pub member: Vec<Member>,
+    pub members: Vec<Member>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub not_found: Vec<GuildId>,
-    pub presences: Vec<Presence>
+    pub presences: Vec<Presence>,
 }
 
 /// A `Guild Role Create` event.
@@ -334,6 +334,7 @@ pub enum GatewayEvent {
     MessageReactionRemove(MessageReactionRemoveEvent),
     MessageReactionRemoveAll(MessageReactionRemoveAllEvent),
     PresenceUpdate(PresenceUpdateEvent),
+    PresencesReplace(PresencesReplaceEvent),
     Ready(ReadyEvent),
     Resumed,
     TypingStart(TypingStartEvent),

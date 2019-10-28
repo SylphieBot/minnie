@@ -13,7 +13,7 @@ base64 = "0.10.1"
 chrono = { version = "0.4", features = ["serde"] }
 crossbeam-channel = "0.3"
 derivative = "1.0.2"
-derive_builder = "0.8.0"
+derive_setters = "0.1.0"
 enumset = { version = "0.4.0", features = ["serde", "nightly"] }
 failure = "0.1.5"
 futures01 = { package = "futures", version = "0.1.21", features = ["nightly"] }

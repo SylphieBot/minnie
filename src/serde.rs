@@ -16,6 +16,8 @@ pub use serde_repr::*;
 pub use serde_json::{self, Value as JsonValue};
 pub use strum_macros::*;
 
+use std::borrow::Cow;
+
 macro_rules! snowflake_visitor_common {
     ($ty:ty) => {
         fn visit_i64<E>(self, v: i64) -> ::std::result::Result<$ty, E> where E: DeError {
@@ -52,64 +54,44 @@ macro_rules! snowflake_visitor_common {
     }
 }
 
-macro_rules! builder_common {
-    ([$($impl_bounds:tt)*] $name:ident, $into_ty:ident) => {
-        impl $($impl_bounds)* $name $($impl_bounds)* {
-            /// Creates a new builder.
+macro_rules! new_from_default {
+    ($name:ident) => {
+        impl <'a> $name <'a> {
+            /// Creates an empty instance.
             pub fn new() -> Self {
                 Default::default()
             }
         }
-        impl $($impl_bounds)* $into_ty $($impl_bounds)* {
-            /// Returns a builder for this struct.
-            pub fn builder() -> $name $($impl_bounds)* {
-                Default::default()
-            }
-        }
     }
 }
-macro_rules! builder_common_docs {
-    ([$($rest:tt)*] $name:expr) => {
-        #[doc = "Builds a new `"] #[doc = $name] #[doc = "`."]
-        $($rest)*
+
+pub trait PushToCow<T> {
+    fn push(&mut self, t: T);
+}
+impl <'a, T: 'a + Clone> PushToCow<T> for Cow<'a, [T]> {
+    fn push(&mut self, t: T) {
+        self.to_mut().push(t);
     }
 }
-macro_rules! builder_common_infallible {
-    ([$($impl_bounds:tt)*] $name:ident, $into_ty:ident) => {
-        builder_common!([$($impl_bounds)*] $name, $into_ty);
-        impl $($impl_bounds)* $name $($impl_bounds)* {
-            builder_common_docs! {[
-                pub fn build(self) -> $into_ty $($impl_bounds)* {
-                    self.build0().unwrap()
-                }
-            ] stringify!($into_ty)}
+impl <T> PushToCow<T> for Option<Vec<T>> {
+    fn push(&mut self, t: T) {
+        if self.is_none() {
+            *self = Some(Default::default());
         }
-        impl $($impl_bounds)* From<$name $($impl_bounds)*> for $into_ty $($impl_bounds)* {
-            fn from(v: $name $($impl_bounds)*) -> Self {
-                v.build()
-            }
-        }
+        self.as_mut().unwrap().push(t)
     }
 }
-macro_rules! builder_common_fallible {
-    ([$($impl_bounds:tt)*] $name:ident, $into_ty:ident) => {
-        builder_common!([$($impl_bounds)*] $name, $into_ty);
-        impl $($impl_bounds)* $name $($impl_bounds)* {
-            builder_common_docs! {[
-                pub fn build(self) -> Result<$into_ty $($impl_bounds)*> {
-                    match self.build0() {
-                        Ok(v) => Ok(v),
-                        Err(e) => bail!(InvalidInput, e.into()),
-                    }
-                }
-            ] stringify!($into_ty)}
+impl <'a, T: 'a + Clone> PushToCow<T> for Option<Cow<'a, [T]>> {
+    fn push(&mut self, t: T) {
+        if self.is_none() {
+            *self = Some(Default::default());
         }
+        self.as_mut().unwrap().push(t)
     }
 }
 
 pub mod utils {
     use super::*;
-    use std::borrow::Cow;
     use std::time::{UNIX_EPOCH, SystemTime, Duration};
 
     pub fn if_false(b: &bool) -> bool {

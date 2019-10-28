@@ -3,6 +3,7 @@ use crate::gateway::{GatewayController, GatewayConfig, PresenceUpdate};
 use crate::http::RateLimits;
 use crate::model::types::{DiscordToken, Snowflake};
 use crate::serde::*;
+use derive_setters::*;
 use reqwest::r#async::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::borrow::Cow;
@@ -31,21 +32,35 @@ pub(crate) struct DiscordContextData {
     pub gateway: GatewayController,
 }
 
+impl Drop for DiscordContextData {
+    fn drop(&mut self) {
+        self.gateway.disconnect();
+    }
+}
+
 const DEFAULT_USER_AGENT: &str =
     concat!("DiscordBot (https://github.com/Lymia/minnie, ", env!("CARGO_PKG_VERSION"), ")");
 
+/// Handles all features relating to a particular Discord bot.
+///
+/// The [`Clone`] implementation creates a new handle to the same context. When the last handle
+/// to a context is dropped, the gateway is automatically disconnected.
 #[derive(Clone, Debug)]
 pub struct DiscordContext {
     pub(crate) data: Arc<DiscordContextData>,
 }
 impl DiscordContext {
+    /// Creates a new Discord context using the default settings.
     pub fn new(client_token: DiscordToken) -> Result<Self> {
         DiscordContextBuilder::new(client_token).build()
     }
+
+    /// Returns a builder that allows configuring the Discord context's settings.
     pub fn builder(client_token: DiscordToken) -> DiscordContextBuilder {
         DiscordContextBuilder::new(client_token)
     }
 
+    /// Returns the gateway controller for this bot.
     pub fn gateway(&self) -> &GatewayController {
         &self.data.gateway
     }
@@ -62,17 +77,34 @@ impl DiscordContext {
     }
 }
 
-#[derive(Debug)]
+/// A builder for a [`DiscordContext`].
+#[derive(Debug, Setters)]
+#[setters(strip_option)]
 pub struct DiscordContextBuilder {
-    context_id: Option<DiscordContextId>,
-    library_name: Option<String>,
-    http_user_agent: Option<String>,
+    #[setters(skip)]
     client_token: DiscordToken,
+
+    /// Sets the context ID for the bot.
+    ///
+    /// This allows [`DiscordContext::id`] to represent a particular bot token in a multi-process
+    /// bot, and [`DiscordContext::unique_id`] to represent a particular process of a particular
+    /// bot.
+    context_id: Option<DiscordContextId>,
+
+    /// Sets the library name reported to the Discord API.
+    library_name: Option<String>,
+
+    /// Sets the user agent used in HTTP requests made by the bot.
+    http_user_agent: Option<String>,
+
+    /// Sets the presence sent to the Discord gateway.
     default_presence: PresenceUpdate,
+
+    /// Sets the configuration of the gateway.
     gateway_config: GatewayConfig,
 }
 impl DiscordContextBuilder {
-    pub fn new(client_token: DiscordToken) -> Self {
+    fn new(client_token: DiscordToken) -> Self {
         DiscordContextBuilder {
             context_id: None,
             library_name: None,
@@ -81,31 +113,6 @@ impl DiscordContextBuilder {
             default_presence: PresenceUpdate::default(),
             gateway_config: GatewayConfig::default(),
         }
-    }
-
-    pub fn with_context_id(mut self, id: DiscordContextId) -> Self {
-        self.context_id = Some(id);
-        self
-    }
-
-    pub fn with_library_name(mut self, library_name: impl ToString) -> Self {
-        self.library_name = Some(library_name.to_string());
-        self
-    }
-
-    pub fn with_user_agent(mut self, agent: impl ToString) -> Self {
-        self.http_user_agent = Some(agent.to_string());
-        self
-    }
-
-    pub fn with_default_presence(mut self, presence: PresenceUpdate) -> Self {
-        self.default_presence = presence;
-        self
-    }
-
-    pub fn with_gateway_config(mut self, config: GatewayConfig) -> Self {
-        self.gateway_config = config;
-        self
     }
 
     pub fn build(self) -> Result<DiscordContext> {

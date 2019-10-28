@@ -24,10 +24,8 @@ pub use model::{GuildMembersRequest, PresenceUpdate};
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
-// TODO: Consider adding builders for presence updates/gateway config.
 // TODO: Add a way to get gateway status.
 // TODO: Add tests.
-// TODO: Only implement parsing/serialization for types we expect to serialize/parse.
 
 /// Passed to an [`GatewayHandler`] what type of error occurred.
 #[derive(Debug)]
@@ -410,19 +408,26 @@ impl GatewayController {
         Ok(())
     }
 
-    /// Disconnects the bot from the Discord gateway.
-    ///
-    /// If `wait` is set to `true`, this function will block until all shards disconnect.
-    pub async fn disconnect(&self, wait: bool) {
+    fn disconnect_common(&self) -> Option<Arc<CurrentGateway>> {
         let gateway = {
             let mut state = self.current.lock();
             state.take()
         };
-        if let Some(gateway) = gateway {
+        if let Some(gateway) = &gateway {
             gateway.shared.shutdown();
-            if wait {
-                gateway.wait_shutdown().await;
-            }
+        }
+        gateway
+    }
+
+    /// Disconnects the bot from the Discord gateway.
+    pub fn disconnect(&self) {
+        self.disconnect_common();
+    }
+
+    /// Disconnects the bot from the Discord gateway, then waits for all shards to disconnect.
+    pub async fn disconnect_wait(&self) {
+        if let Some(gateway) = self.disconnect_common() {
+            gateway.wait_shutdown().await;
         }
     }
 

@@ -266,6 +266,32 @@ pub struct Activity {
     pub assets: Option<ActivityAssets>,
     pub secrets: Option<ActivitySecrets>,
     pub instance: Option<bool>,
+    pub emoji: Option<EmojiRef>,
     #[serde(default, skip_serializing_if = "EnumSet::is_empty")]
     pub flags: EnumSet<ActivityFlags>,
+}
+impl Activity {
+    /// Creates a new activity with the given type and name.
+    pub fn new(tp: ActivityType, name: impl Into<Cow<'static, str>>) -> Self {
+        Activity {
+            name: name.into(), activity_type: tp,
+            url: None, timestamps: None, application_id: None, details: None, state: None,
+            party: None, assets: None, secrets: None, instance: None, emoji: None,
+            flags: EnumSet::new(),
+        }
+    }
+
+    /// Creates a new custom status.
+    pub fn custom_status(emoji: Option<EmojiRef>, status: impl Into<Cow<'static, str>>) -> Self {
+        let mut activity = Activity::new(ActivityType::CustomStatus, "Custom Status");
+        activity.emoji = emoji;
+        activity.state = Some(status.into());
+        activity
+    }
+
+    /// Sets the URL associated with this activity.
+    pub fn with_url(mut self, url: impl Into<Cow<'static, str>>) -> Self {
+        self.url = Some(url.into());
+        self
+    }
 }

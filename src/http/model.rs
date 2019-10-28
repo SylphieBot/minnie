@@ -4,9 +4,10 @@ use crate::model::guild::*;
 use crate::model::message::*;
 use crate::model::types::*;
 use crate::serde::*;
-use derive_builder::*;
+use derive_setters::*;
 use reqwest::r#async::multipart::Part;
 use std::borrow::Cow;
+use std::marker::PhantomData;
 use std::time::Duration;
 
 /// The return value of the `Get Gateway` endpoint.
@@ -38,54 +39,61 @@ pub struct GetGatewayBot {
 /// The parameters of the `Modify Channel` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct ModifyChannelParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
     pub name: Option<Cow<'a, str>>,
     pub position: Option<u32>,
-    #[builder(setter(into))]
+    #[setters(into)]
     pub topic: Option<Cow<'a, str>>,
     pub nsfw: Option<bool>,
     pub rate_limit_per_user: Option<u32>,
     pub bitrate: Option<u32>,
     pub user_limit: Option<u32>,
-    #[builder(setter(into))]
+    #[setters(into)]
     pub permission_overwrites: Option<Cow<'a, [PermissionOverwrite]>>,
+    #[setters(into)]
     pub parent_id: Option<ChannelId>,
 }
-builder_common_infallible!([<'a>] ModifyChannelParamsBuilder, ModifyChannelParams);
+new_from_default!(ModifyChannelParams);
 
 /// The parameters of the `Get Channel Messages` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct GetChannelMessagesParams {
+pub struct GetChannelMessagesParams<'a> {
+    #[setters(into)]
     pub around: Option<MessageId>,
+    #[setters(into)]
     pub before: Option<MessageId>,
+    #[setters(into)]
     pub after: Option<MessageId>,
     pub limit: Option<u32>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
 }
-builder_common_infallible!([] GetChannelMessagesParamsBuilder, GetChannelMessagesParams);
+new_from_default!(GetChannelMessagesParams);
 
 /// The parameters of the `Create Messages` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct CreateMessageParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
     pub content: Option<Cow<'a, str>>,
-    pub nonce: Option<Snowflake>,
+    #[setters(into)]
+    pub nonce: Option<MessageNonce>,
     pub tts: Option<bool>,
-    #[builder(setter(into))]
+    #[setters(into)]
     pub embed: Option<Embed<'a>>,
 }
-builder_common_infallible!([<'a>] CreateMessageParamsBuilder, CreateMessageParams);
+new_from_default!(CreateMessageParams);
 
 /// A file to pass to the `Create Messages` endpoint.
 #[serde_with::skip_serializing_none]
@@ -96,6 +104,7 @@ pub struct CreateMessageFile<'a> {
     pub contents: Cow<'a, [u8]>,
 }
 impl <'a> CreateMessageFile<'a> {
+    /// Create a new file.
     pub fn new<'p0: 'a, 'p1: 'a, 'p2: 'a>(
         file_name: impl Into<Cow<'p0, str>>,
         mime_type: impl Into<Cow<'p1, str>>,
@@ -117,258 +126,313 @@ impl <'a> CreateMessageFile<'a> {
 /// The parameters of the `Get Reactions` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct GetReactionsParams {
+pub struct GetReactionsParams<'a> {
+    #[setters(into)]
     pub before: Option<UserId>,
+    #[setters(into)]
     pub after: Option<UserId>,
     pub limit: Option<u32>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
 }
-builder_common_infallible!([] GetReactionsParamsBuilder, GetReactionsParams);
+new_from_default!(GetReactionsParams);
 
 /// The parameters of the `Edit Message` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct EditMessageParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
     pub content: Option<Cow<'a, str>>,
-    #[builder(setter(into))]
     pub embed: Option<Embed<'a>>,
 }
-builder_common_infallible!([<'a>] EditMessageParamsBuilder, EditMessageParams);
+new_from_default!(EditMessageParams);
 
-// TODO: Builder
 /// The parameters of the `Edit Channel Permissions` endpoint.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Setters)]
 #[non_exhaustive]
-pub struct EditChannelPermissionsParams {
+pub struct EditChannelPermissionsParams<'a> {
     pub allow: EnumSet<Permission>,
     pub deny: EnumSet<Permission>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
+}
+impl <'a> EditChannelPermissionsParams<'a> {
+    /// Create a new instance from the required parameters.
+    pub fn new(allow: EnumSet<Permission>, deny: EnumSet<Permission>) -> Self {
+        EditChannelPermissionsParams { allow, deny, phantom: PhantomData }
+    }
 }
 
 /// The parameters of the `Create Channel Invite` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct CreateChannelInviteParams {
+pub struct CreateChannelInviteParams<'a> {
     pub max_age: Option<u32>,
     pub max_uses: Option<u32>,
     pub temporary: Option<bool>,
     pub unique: Option<bool>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
 }
-builder_common_infallible!([] CreateChannelInviteParamsBuilder, CreateChannelInviteParams);
+new_from_default!(CreateChannelInviteParams);
 
 /// The parameters of the `Create Guild Emoji` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[derive(Builder)]
-#[builder(pattern = "owned", setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct CreateGuildEmojiParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
     pub name: Cow<'a, str>,
-    #[builder(setter(into))]
+    #[setters(into)]
     pub contents: Cow<'a, str>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
     pub roles: Option<Cow<'a, [RoleId]>>,
 }
-builder_common_fallible!([<'a>] CreateGuildEmojiParamsBuilder, CreateGuildEmojiParams);
+impl <'a> CreateGuildEmojiParams<'a> {
+    /// Create a new instance from the required parameters.
+    pub fn new(name: impl Into<Cow<'a, str>>, contents: impl Into<Cow<'a, str>>) -> Self {
+        CreateGuildEmojiParams {
+            name: name.into(),
+            contents: contents.into(),
+            roles: None,
+        }
+    }
+}
 
 /// The parameters of the `Modify Guild Emoji` endpoint.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[derive(Builder)]
-#[builder(pattern = "owned", setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct ModifyGuildEmojiParams<'a> {
-    #[builder(setter(into))]
-    pub name: Cow<'a, str>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
+    pub name: Option<Cow<'a, str>>,
+    #[setters(into)]
     pub roles: Option<Cow<'a, [RoleId]>>,
 }
-builder_common_fallible!([<'a>] ModifyGuildEmojiParamsBuilder, ModifyGuildEmojiParams);
+new_from_default!(ModifyGuildEmojiParams);
 
 /// The parameters of the `Create Guild` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[derive(Builder)]
-#[builder(pattern = "owned", setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct CreateGuildParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
     pub name: Cow<'a, str>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
     pub region: Option<Cow<'a, str>>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
     pub icon: Option<Cow<'a, str>>,
-    #[builder(default)]
     pub verification_level: Option<VerificationLevel>,
-    #[builder(default)]
     pub default_message_notifications: Option<NotificationLevel>,
-    #[builder(default)]
     pub explicit_content_filter: Option<ExplicitContentFilterLevel>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
     pub roles: Option<Cow<'a, [GuildRoleParams<'a>]>>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
     pub channels: Option<Cow<'a, [CreateGuildChannelParams<'a>]>>,
 }
-builder_common_fallible!([<'a>] CreateGuildParamsBuilder, CreateGuildParams);
+impl <'a> CreateGuildParams<'a> {
+    /// Create a new instance from the required parameters.
+    pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
+        CreateGuildParams {
+            name: name.into(),
+            region: None, icon: None, verification_level: None, roles: None, channels: None,
+            default_message_notifications: None, explicit_content_filter: None,
+        }
+    }
+
+    /// Adds a role to the guild.
+    pub fn role(mut self, role: GuildRoleParams<'a>) -> Self {
+        self.roles.push(role);
+        self
+    }
+
+    /// Adds a channel to the guild.
+    pub fn channel(mut self, channel: CreateGuildChannelParams<'a>) -> Self {
+        self.channels.push(channel);
+        self
+    }
+}
 
 /// The parameters of the `Modify Guild` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct ModifyGuildParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub name: Option<Cow<'a, str>>,
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub region: Option<Cow<'a, str>>,
 	pub verification_level: Option<VerificationLevel>,
 	pub default_message_notifications: Option<NotificationLevel>,
 	pub explicit_content_filter: Option<ExplicitContentFilterLevel>,
+    #[setters(into)]
 	pub afk_channel_id: Option<ChannelId>,
 	pub afk_timeout: Option<u32>,
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub icon: Option<Cow<'a, str>>,
+    #[setters(into)]
 	pub owner_id: Option<UserId>,
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub splash: Option<Cow<'a, str>>,
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub banner: Option<Cow<'a, str>>,
+    #[setters(into)]
 	pub system_channel_id: Option<ChannelId>,
 }
-builder_common_infallible!([<'a>] ModifyGuildParamsBuilder, ModifyGuildParams);
+new_from_default!(ModifyGuildParams);
 
 /// The parameters of the `Create Guild Channel` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[derive(Builder)]
-#[builder(pattern = "owned", setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct CreateGuildChannelParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub name: Cow<'a, str>,
 	#[serde(rename = "type")]
-    #[builder(default)]
 	pub channel_type: Option<ChannelType>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
 	pub topic: Option<Cow<'a, str>>,
-    #[builder(default)]
 	pub bitrate: Option<u32>,
-    #[builder(default)]
 	pub user_limit: Option<u32>,
-    #[builder(default)]
 	pub rate_limit_per_user: Option<u32>,
-    #[builder(default)]
 	pub position: Option<u32>,
-    #[builder(default, setter(into))]
+    #[setters(into)]
 	pub permission_overwrites: Option<Cow<'a, [PermissionOverwrite]>>,
-    #[builder(default)]
+    #[setters(into)]
 	pub parent_id: Option<ChannelId>,
-    #[builder(default)]
 	pub nsfw: Option<bool>,
 }
-builder_common_fallible!([<'a>] CreateGuildChannelParamsBuilder, CreateGuildChannelParams);
+impl <'a> CreateGuildChannelParams<'a> {
+    /// Create a new instance from the required parameters.
+    pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
+        CreateGuildChannelParams {
+            name: name.into(),
+            channel_type: None, topic: None, bitrate: None, user_limit: None,
+            rate_limit_per_user: None, position: None, permission_overwrites: None,
+            parent_id: None, nsfw: None,
+        }
+    }
+}
 
 /// The parameters of the `List Guild Members` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct ListGuildMembersParams {
+pub struct ListGuildMembersParams<'a> {
     pub limit: Option<u32>,
+    #[setters(into)]
     pub after: Option<UserId>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>
 }
-builder_common_infallible!([] ListGuildMembersParamsBuilder, ListGuildMembersParams);
+new_from_default!(ListGuildMembersParams);
 
 /// The parameters of the `Modify Guild Member` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct ModifyGuildMemberParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
     pub nick: Option<Cow<'a, str>>,
-    #[builder(setter(into))]
+    #[setters(into)]
     pub roles: Option<Cow<'a, [RoleId]>>,
     pub mute: Option<bool>,
     pub deaf: Option<bool>,
+    #[setters(into)]
     pub channel_id: Option<ChannelId>,
 }
-builder_common_infallible!([<'a>] ModifyGuildMemberParamsBuilder, ModifyGuildMemberParams);
+new_from_default!(ModifyGuildMemberParams);
 
 /// The parameters of the `Create Guild Ban` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct CreateGuildBanParams<'a> {
     #[serde(rename = "delete-message-days")]
     pub delete_message_days: Option<u32>,
-    #[builder(setter(into))]
+    #[setters(into)]
     pub reason: Option<Cow<'a, str>>,
 }
-builder_common_infallible!([<'a>] CreateGuildBanParamsBuilder, CreateGuildBanParams);
+new_from_default!(CreateGuildBanParams);
 
 /// The parameters of the `Create Guild Role` or `Modify Guild Role` endpoints.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
 pub struct GuildRoleParams<'a> {
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub name: Option<Cow<'a, str>>,
-    #[builder(setter(into))]
+    #[setters(into)]
 	pub permissions: Option<EnumSet<Permission>>,
+	#[setters(into)]
 	pub color: Option<Color>,
 	pub hoist: Option<bool>,
 	pub mentionable: Option<bool>,
 }
-builder_common_infallible!([<'a>] GuildRoleParamsBuilder, GuildRoleParams);
+new_from_default!(GuildRoleParams);
 
 /// The parameters of the `Get Guild Prune Count` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct GetGuildPruneCountParams {
+pub struct GetGuildPruneCountParams<'a> {
     pub days: Option<u32>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
 }
-builder_common_infallible!([] GetGuildPruneCountParamsBuilder, GetGuildPruneCountParams);
+new_from_default!(GetGuildPruneCountParams);
 
 /// The parameters of the `Begin Guild Prune` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct BeginGuildPruneParams {
+pub struct BeginGuildPruneParams<'a> {
     pub days: Option<u32>,
     pub compute_prune_count: Option<bool>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
 }
-builder_common_infallible!([] BeginGuildPruneParamsBuilder, BeginGuildPruneParams);
-
-impl From<GetGuildPruneCountParams> for BeginGuildPruneParams {
-    fn from(params: GetGuildPruneCountParams) -> Self {
+impl <'a> From<GetGuildPruneCountParams<'a>> for BeginGuildPruneParams<'a> {
+    fn from(params: GetGuildPruneCountParams<'a>) -> Self {
         BeginGuildPruneParams {
             days: params.days,
             ..Default::default()
         }
     }
 }
+new_from_default!(BeginGuildPruneParams);
 
 /// Information relating to users pruned from a guild.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -380,10 +444,12 @@ pub struct GuildPruneInfo {
 /// The parameters of the `Get Invite` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
-#[derive(Builder)]
-#[builder(pattern = "owned", default, setter(strip_option), build_fn(name = "build0", private))]
+#[derive(Setters)]
+#[setters(strip_option)]
 #[non_exhaustive]
-pub struct GetInviteParams {
+pub struct GetInviteParams<'a> {
     pub with_counts: Option<bool>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
 }
-builder_common_infallible!([] GetInviteParamsBuilder, GetInviteParams);
+new_from_default!(GetInviteParams);
