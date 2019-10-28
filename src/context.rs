@@ -81,7 +81,7 @@ impl DiscordContext {
 #[derive(Debug, Setters)]
 #[setters(strip_option)]
 pub struct DiscordContextBuilder {
-    #[setters(skip)]
+    /// Sets the client token for this builder.
     client_token: DiscordToken,
 
     /// Sets the context ID for the bot.
@@ -116,6 +116,10 @@ impl DiscordContextBuilder {
     }
 
     pub fn build(self) -> Result<DiscordContext> {
+        if self.client_token.is_bearer() {
+            bail!(InvalidInput, "Bearer tokens cannot be used to create Discord contexts.".into());
+        }
+
         let context_id = match self.context_id {
             Some(id) => id,
             None => DiscordContextId(Snowflake::random()),

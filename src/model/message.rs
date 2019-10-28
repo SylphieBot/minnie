@@ -39,7 +39,7 @@ pub struct Attachment {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct Embed<'a> {
 	#[setters(into)]
@@ -121,7 +121,7 @@ macro_rules! new_from_str {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct EmbedFooter<'a> {
 	#[setters(into)]
@@ -144,7 +144,7 @@ new_from_str!(EmbedFooter);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct EmbedImage<'a> {
 	#[setters(into)]
@@ -186,7 +186,7 @@ pub struct EmbedProvider<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Default, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct EmbedAuthor<'a> {
 	#[setters(into)]
@@ -208,7 +208,7 @@ new_from_str!(EmbedAuthor);
 /// An field in a message embed.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct EmbedField<'a> {
 	#[setters(into)]

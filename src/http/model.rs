@@ -40,7 +40,7 @@ pub struct GetGatewayBot {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct ModifyChannelParams<'a> {
     #[setters(into)]
@@ -63,7 +63,7 @@ new_from_default!(ModifyChannelParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GetChannelMessagesParams<'a> {
     #[setters(into)]
@@ -82,7 +82,7 @@ new_from_default!(GetChannelMessagesParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateMessageParams<'a> {
     #[setters(into)]
@@ -127,7 +127,7 @@ impl <'a> CreateMessageFile<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GetReactionsParams<'a> {
     #[setters(into)]
@@ -144,7 +144,7 @@ new_from_default!(GetReactionsParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct EditMessageParams<'a> {
     #[setters(into)]
@@ -174,7 +174,7 @@ impl <'a> EditChannelPermissionsParams<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateChannelInviteParams<'a> {
     pub max_age: Option<u32>,
@@ -186,11 +186,29 @@ pub struct CreateChannelInviteParams<'a> {
 }
 new_from_default!(CreateChannelInviteParams);
 
+/// The parameters of the `Group DM Add Recipient` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+#[non_exhaustive]
+pub struct GroupDmAddRecipientParams<'a> {
+    pub access_token: DiscordToken,
+    #[setters(into)]
+    pub nick: Cow<'a, str>,
+}
+impl <'a> GroupDmAddRecipientParams<'a> {
+    /// Create a new instance from the required parameters.
+    pub fn new(access_token: DiscordToken, nick: impl Into<Cow<'a, str>>) -> Self {
+        GroupDmAddRecipientParams { access_token, nick: nick.into() }
+    }
+}
+
 /// The parameters of the `Create Guild Emoji` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateGuildEmojiParams<'a> {
     #[setters(into)]
@@ -215,7 +233,7 @@ impl <'a> CreateGuildEmojiParams<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct ModifyGuildEmojiParams<'a> {
     #[setters(into)]
@@ -229,7 +247,7 @@ new_from_default!(ModifyGuildEmojiParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateGuildParams<'a> {
     #[setters(into)]
@@ -273,7 +291,7 @@ impl <'a> CreateGuildParams<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct ModifyGuildParams<'a> {
     #[setters(into)]
@@ -303,7 +321,7 @@ new_from_default!(ModifyGuildParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateGuildChannelParams<'a> {
     #[setters(into)]
@@ -338,7 +356,7 @@ impl <'a> CreateGuildChannelParams<'a> {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct ListGuildMembersParams<'a> {
     pub limit: Option<u32>,
@@ -349,11 +367,35 @@ pub struct ListGuildMembersParams<'a> {
 }
 new_from_default!(ListGuildMembersParams);
 
+/// The parameters of the `Add Guild Member` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+#[non_exhaustive]
+pub struct AddGuildMemberParams<'a> {
+    pub access_token: DiscordToken,
+    #[setters(into)]
+    pub nick: Option<Cow<'a, str>>,
+    #[setters(into)]
+    pub roles: Option<Cow<'a, [RoleId]>>,
+    pub mute: Option<bool>,
+    pub deaf: Option<bool>,
+}
+impl <'a> AddGuildMemberParams<'a> {
+    /// Create a new instance from the required parameters.
+    pub fn new(access_token: DiscordToken) -> Self {
+        AddGuildMemberParams {
+            access_token, nick: None, roles: None, mute: None, deaf: None,
+        }
+    }
+}
+
 /// The parameters of the `Modify Guild Member` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct ModifyGuildMemberParams<'a> {
     #[setters(into)]
@@ -371,7 +413,7 @@ new_from_default!(ModifyGuildMemberParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateGuildBanParams<'a> {
     #[serde(rename = "delete-message-days")]
@@ -385,7 +427,7 @@ new_from_default!(CreateGuildBanParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GuildRoleParams<'a> {
     #[setters(into)]
@@ -403,7 +445,7 @@ new_from_default!(GuildRoleParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GetGuildPruneCountParams<'a> {
     pub days: Option<u32>,
@@ -416,7 +458,7 @@ new_from_default!(GetGuildPruneCountParams);
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct BeginGuildPruneParams<'a> {
     pub days: Option<u32>,
@@ -434,6 +476,20 @@ impl <'a> From<GetGuildPruneCountParams<'a>> for BeginGuildPruneParams<'a> {
 }
 new_from_default!(BeginGuildPruneParams);
 
+/// The parameters of the `Modify Guild Embed` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+#[non_exhaustive]
+pub struct ModifyGuildEmbedParams<'a> {
+    pub enabled: Option<bool>,
+    pub channel_id: Option<ChannelId>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
+}
+new_from_default!(ModifyGuildEmbedParams);
+
 /// Information relating to users pruned from a guild.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
@@ -445,7 +501,7 @@ pub struct GuildPruneInfo {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GetInviteParams<'a> {
     pub with_counts: Option<bool>,
@@ -453,3 +509,33 @@ pub struct GetInviteParams<'a> {
     phantom: PhantomData<&'a ()>,
 }
 new_from_default!(GetInviteParams);
+
+
+/// The parameters of the `Modify Current User` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+#[non_exhaustive]
+pub struct ModifyCurrentUserParams<'a> {
+    pub username: Option<Cow<'a, str>>,
+    pub avatar: Option<Cow<'a, str>>,
+}
+new_from_default!(ModifyCurrentUserParams);
+
+/// The parameters of the `Get Current User Guilds` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+#[non_exhaustive]
+pub struct GetCurrentUserGuildsParams<'a> {
+    #[setters(into)]
+    pub before: Option<GuildId>,
+    #[setters(into)]
+    pub after: Option<GuildId>,
+    pub limit: Option<u32>,
+    #[serde(skip)]
+    phantom: PhantomData<&'a ()>,
+}
+new_from_default!(GetCurrentUserGuildsParams);

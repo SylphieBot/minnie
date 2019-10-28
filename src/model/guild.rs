@@ -201,10 +201,13 @@ pub struct VoiceState {
 pub struct PartialGuild {
     pub id: GuildId,
     pub name: String,
+    pub owner: Option<bool>,
+    pub owner_id: Option<UserId>,
+    pub permissions: Option<EnumSet<Permission>>,
     pub icon: Option<String>,
     pub splash: Option<String>,
-    pub verification_level: VerificationLevel,
-    pub features: EnumSet<GuildFeature>,
+    pub verification_level: Option<VerificationLevel>,
+    pub features: Option<EnumSet<GuildFeature>>,
     pub vanity_url_code: Option<String>,
     pub description: Option<String>,
     pub banner: Option<String>,
@@ -291,4 +294,12 @@ pub struct VoiceRegion {
 	pub optimal: bool,
 	pub deprecated: bool,
 	pub custom: bool,
+}
+
+/// Information relating to a guild's embed settings.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct GuildEmbedSettings {
+    pub enabled: bool,
+    pub channel_id: Option<ChannelId>,
 }

@@ -72,21 +72,37 @@ impl DiscordToken {
 
         Ok(DiscordToken(if has_bot { tok.into() } else { format!("Bot {}", tok).into() }))
     }
+
+    /// Creates a new bot token, and checks it for validity.
     pub fn new(tok: impl ToString) -> Result<DiscordToken> {
         Self::from_bot_string(tok.to_string())
     }
 
+    /// Creates a new OAuth Bearer token, and checks it for validity.
     pub fn from_bearer(tok: impl ToString) -> Result<DiscordToken> {
         let tok = tok.to_string();
         ensure!(tok.starts_with("Bearer "), InvalidBotToken, "Invalid Bearer token.");
         Ok(DiscordToken(tok.into()))
     }
 
+    /// Checks whether this is a bot token.
+    pub fn is_bot(&self) -> bool {
+        self.0.starts_with("Bot ")
+    }
+
+    /// Checks whether this is a bearer token.
+    pub fn is_bearer(&self) -> bool {
+        self.0.starts_with("Bearer ")
+    }
+
+    /// Converts the token to a header value.
     pub fn to_header_value(&self) -> HeaderValue {
         let mut val = HeaderValue::from_str(&self.0).expect("Could not encode token as header?");
         val.set_sensitive(true);
         val
     }
+
+    /// Returns the token as a string.
     pub fn as_str(&self) -> &str {
         &self.0
     }

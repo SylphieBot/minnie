@@ -12,8 +12,9 @@ use std::time::{SystemTime, Duration};
 
 /// The presence the bot should be using.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Setters)]
-#[setters(strip_option)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct PresenceUpdate {
     #[serde(with = "utils::system_time_millis")]
@@ -50,7 +51,7 @@ impl From<UserStatus> for PresenceUpdate {
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Default, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
-#[setters(strip_option)]
+#[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GuildMembersRequest {
     #[setters(rename = "guild_ids", into)]
