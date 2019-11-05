@@ -3,80 +3,95 @@
 use failure::*;
 use flate2::DecompressError;
 use futures::FutureExt;
-use reqwest::{Error as ReqwestError};
+use reqwest::{Error as ReqwestError, StatusCode};
 use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
 use serde_json::{Error as SerdeJsonError};
 use std::any::Any;
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::fmt;
 use std::future::Future;
 use std::io::{Error as IoError};
 use std::num::{ParseIntError, ParseFloatError};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::str::ParseBoolError;
-use websocket::{WebSocketError, CloseData};
+use webpki::InvalidDNSNameError;
+use websocket::WebSocketError;
 
-pub(crate) use std::result::{Result as StdResult};
+pub use std::result::{Result as StdResult};
 
 
+macro_rules! lib_error {
+    ($($ty:ident),* $(,)?) => {
+        #[derive(Fail, Debug)]
+        pub enum LibError {$(
+            #[fail(display = "{}", _0)]
+            $ty(#[cause] $ty),
+        )*}
+        $(
+            impl From<$ty> for LibError {
+                #[inline(never)] #[cold]
+                fn from(err: $ty) -> Self {
+                    LibError::$ty(err)
+                }
+            }
+        )*
+    }
+}
+lib_error! {
+    DecompressError, InvalidDNSNameError, IoError, ParseBoolError, ParseIntError, ParseFloatError,
+    ReqwestError, InvalidHeaderValue, ReqwestToStrError, SerdeJsonError, WebSocketError,
+}
+impl From<Infallible> for LibError {
+    fn from(_: Infallible) -> Self {
+        panic!("wtf")
+    }
+}
 
 /// Represents the kind of error that occurred.
 #[derive(Fail, Debug)]
 #[non_exhaustive]
 pub enum ErrorKind {
+    /// Invalid input was provided to the library.
+    ///
+    /// This generally indicates a bug in an user of the library.
+    #[fail(display = "Invalid API usage: {}", _0)]
+    InvalidInput(&'static str),
+    /// An IO error occurred.
+    ///
+    /// This generally occurs because Discord is experiencing issues.
+    #[fail(display = "IO Error: {}", _0)]
+    IoError(&'static str),
+    /// An internal error has occurred.
+    ///
+    /// This generally indicates a bug in the library.
+    #[fail(display = "Internal error: {}", _0)]
+    InternalError(&'static str),
+    /// Used to convey information about a panic to the gateway or voice event receivers.
+    ///
+    /// This should not be returned from other methods in normal circumstances, and panics in
+    /// most library code will directly propagate to the caller.
+    #[fail(display = "{}", _0)]
+    Panicked(Cow<'static, str>),
+
     /// Discord returned an unexpected or invalid response.
     ///
     /// This may happen if Discord is experiencing issues or the library hasn't been updated
     /// for a change in Discord's protocol.
     #[fail(display = "Discord returned bad response: {}", _0)]
     DiscordBadResponse(&'static str),
-    /// An internal error has occurred. This generally indicates a big in the library.
-    #[fail(display = "Internal error: {}", _0)]
-    InternalError(&'static str),
-    #[fail(display = "Invalid API usage: {}", _0)]
-    InvalidInput(&'static str),
-    #[fail(display = "{}", _0)]
-    Panicked(Cow<'static, str>),
-
-    /// The gateway or voice websocket was disconnected.
-    #[fail(display = "Websocket disconnected: {:?}", _0)]
-    WebsocketDisconnected(Option<CloseData>),
-    /// A gateway or voice packet failed to parse.
-    ///
-    /// This may happen if the library hasn't been updated for a change in Discord's protocol.
-    #[fail(display = "Failed to parse websocket packet.")]
-    PacketParseError,
-
-    // Wrappers for external error types.
-    #[fail(display = "Error decompressing a packet: {}", _0)]
-    DecompressError(DecompressError),
-    #[fail(display = "An IO error occurred: {}", _0)]
-    IoError(IoError),
-    #[fail(display = "Error parsing boolean")]
-    ParseBoolError(ParseBoolError),
-    #[fail(display = "Error parsing integer: {}", _0)]
-    ParseIntError(ParseIntError),
-    #[fail(display = "Error parsing float: {}", _0)]
-    ParseFloatError(ParseFloatError),
-    #[fail(display = "Error making HTTP request: {}", _0)]
-    ReqwestError(ReqwestError),
-    #[fail(display = "Could not convert value to HTTP header: {}", _0)]
-    ReqwestHeaderError(InvalidHeaderValue),
-    #[fail(display = "Could not convert HTTP header to string: {}", _0)]
-    ReqwestToStrError(ReqwestToStrError),
-    #[fail(display = "Error parsing JSON: {}", _0)]
-    SerdeJsonError(SerdeJsonError),
-    #[fail(display = "Websocket error: {}", _0)]
-    WebSocketError(WebSocketError),
+    /// Discord returned an error status code.
+    #[fail(display = "Request failed with {}", _0)]
+    RequestFailed(StatusCode),
 }
 
 struct ErrorData {
     kind: ErrorKind,
     backtrace: Option<Backtrace>,
-    cause: Option<Box<dyn Fail>>,
+    cause: Option<LibError>,
 }
 
-pub(crate) fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
+pub fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
     let mut current: Option<&dyn Fail> = Some(&*fail);
     while let Some(x) = current {
         if let Some(bt) = x.backtrace() {
@@ -94,15 +109,17 @@ pub(crate) fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
 pub struct Error(Box<ErrorData>);
 impl Error {
     #[inline(never)] #[cold]
-    pub fn new(kind: ErrorKind) -> Self {
+    fn new(kind: ErrorKind) -> Self {
         Error(Box::new(ErrorData {
-            kind, backtrace: None, cause: None
+            kind, backtrace: None, cause: None,
         }))
     }
 
     #[inline(never)] #[cold]
-    fn new_with_cause(kind: ErrorKind, cause: impl Fail) -> Self {
-        Error::new(kind).with_cause(Box::new(cause))
+    pub(crate) fn new_with_cause(kind: ErrorKind, cause: LibError) -> Self {
+        let mut err = Error::new(kind);
+        err.0.cause = Some(cause);
+        err
     }
 
     #[inline(never)] #[cold]
@@ -110,16 +127,10 @@ impl Error {
         Error::new(kind).with_backtrace()
     }
 
-    #[inline(never)] #[cold]
     fn with_backtrace(mut self) -> Self {
         if !self.backtrace().is_some() {
             self.0.backtrace = Some(Backtrace::new());
         }
-        self
-    }
-
-    fn with_cause(mut self, cause: Box<dyn Fail>) -> Self {
-        self.0.cause = Some(cause);
         self
     }
 
@@ -135,22 +146,21 @@ impl Error {
         Error::new(ErrorKind::Panicked(panic))
     }
 
-    /// Catches panics that occur in a closure, wrapping them in an [`Error`].
-    pub fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
+    pub(crate) fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
         match catch_unwind(AssertUnwindSafe(func)) {
             Ok(r) => r,
             Err(e) => Err(Error::wrap_panic(e)),
         }
     }
 
-    /// Catches panics that occur in a future, wrapping then in an [`Error`].
-    pub async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
+    pub(crate) async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
         match AssertUnwindSafe(fut).catch_unwind().await {
             Ok(v) => v,
             Err(panic) => Err(Error::wrap_panic(panic)),
         }
     }
 
+    /// Returns the type of error contained in this object.
     pub fn error_kind(&self) -> &ErrorKind {
         &self.0.kind
     }
@@ -159,6 +169,8 @@ impl Error {
     pub fn find_backtrace(&self) -> Option<&Backtrace> {
         find_backtrace(self)
     }
+
+    // TODO: Add is_* helpers?
 }
 impl Fail for Error {
     fn name(&self) -> Option<&str> {
@@ -166,10 +178,7 @@ impl Fail for Error {
     }
 
     fn cause(&self) -> Option<&dyn Fail> {
-        match self.0.kind.cause() {
-            Some(x) => Some(x),
-            None => self.0.cause.as_ref().map(|x| &**x),
-        }
+        self.0.cause.as_ref().and_then(|x| x.cause())
     }
 
     fn backtrace(&self) -> Option<&Backtrace> {
@@ -178,44 +187,49 @@ impl Fail for Error {
 }
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0.kind, f)
+        f.debug_tuple("Error")
+            .field(&self.0.kind)
+            .field(&self.0.cause)
+            .finish()
     }
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0.kind, f)
+        fmt::Display::fmt(&self.0.kind, f)?;
+        if let Some(x) = &self.0.cause {
+            f.write_str(" (caused by: ")?;
+            fmt::Display::fmt(x, f)?;
+            f.write_str(")")?;
+        }
+        Ok(())
     }
 }
 
 /// The result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;
 
-macro_rules! generic_from {
-    ($($branch:ident => $ty:ty),* $(,)?) => {$(
-        impl From<$ty> for Error {
-            #[inline(never)] #[cold]
-            fn from(err: $ty) -> Self {
-                Error::new(ErrorKind::$branch(err)).with_backtrace()
-            }
-        }
-    )*}
-}
-generic_from! {
-    DecompressError => DecompressError,
-    IoError => IoError,
-    ParseBoolError => ParseBoolError,
-    ParseIntError => ParseIntError,
-    ParseFloatError => ParseFloatError,
-    ReqwestError => ReqwestError,
-    ReqwestHeaderError => InvalidHeaderValue,
-    ReqwestToStrError => ReqwestToStrError,
-    SerdeJsonError => SerdeJsonError,
-    WebSocketError => WebSocketError,
-}
+pub type LibResult<T> = StdResult<T, LibError>;
 
 // Helpers for error handling
-pub(crate) trait ErrorExt<T> {
+pub trait ErrorExt<T>: Sized {
     fn context(self, kind: ErrorKind) -> Result<T>;
+
+    fn io_err(self, text: &'static str) -> Result<T> {
+        self.context(ErrorKind::IoError(text))
+    }
+    fn bad_response(self, text: &'static str) -> Result<T> {
+        self.context(ErrorKind::DiscordBadResponse(text))
+    }
+    fn internal_err(self, text: &'static str) -> Result<T> {
+        self.context(ErrorKind::InternalError(text))
+    }
+    fn invalid_input(self, text: &'static str) -> Result<T> {
+        self.context(ErrorKind::InvalidInput(text))
+    }
+
+    fn unexpected(self) -> Result<T> {
+        self.internal_err("Unexpected error encountered.")
+    }
 }
 impl <T> ErrorExt<T> for Option<T> {
     #[inline(always)]
@@ -226,7 +240,7 @@ impl <T> ErrorExt<T> for Option<T> {
         }
     }
 }
-impl <T, E: Into<Error>> ErrorExt<T> for StdResult<T, E> {
+impl <T, E: Into<LibError>> ErrorExt<T> for StdResult<T, E> {
     #[inline(always)]
     fn context(self, kind: ErrorKind) -> Result<T> {
         match self {

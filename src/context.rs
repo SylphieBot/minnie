@@ -134,14 +134,16 @@ impl DiscordContextBuilder {
             None => DEFAULT_USER_AGENT.into(),
         };
         let mut headers = HeaderMap::new();
-        headers.insert(USER_AGENT, HeaderValue::from_str(&http_user_agent)?);
+        headers.insert(USER_AGENT, HeaderValue::from_str(&http_user_agent)
+            .invalid_input("User agent contains non-ASCII characters.")?);
         headers.insert(HeaderName::from_static("authorization"),
                        self.client_token.to_header_value());
         let http_client = ClientBuilder::new()
             .use_rustls_tls()
             .default_headers(headers)
             .referer(false)
-            .build()?;
+            .build()
+            .internal_err("Failed to create HTTP client.")?;
 
         let mut rustls_config = ClientConfig::new();
         rustls_config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);

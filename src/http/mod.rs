@@ -18,6 +18,9 @@ mod model;
 use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
 pub use self::model::*;
 
+#[doc(inline)]
+pub use reqwest::StatusCode;
+
 #[derive(Default, Debug)]
 pub(crate) struct RateLimits {
     global_limit: GlobalLimit,
@@ -164,7 +167,14 @@ macro_rules! routes {
                     client_token,
                     rate_id,
                 ).await?;
-                Ok(($(_response.json::<$ty>().compat().await?)?))
+                Ok(($(_response.json::<$ty>().compat().await.map_err(|x| {
+                    let kind = if x.is_serialization() {
+                        ErrorKind::DiscordBadResponse("Could not parse API response.")
+                    } else {
+                        ErrorKind::IoError("Failed to receive API response.")
+                    };
+                    Error::new_with_cause(kind, x.into())
+                })?)?))
             }
         )*}
     }
@@ -221,7 +231,7 @@ routes! {
                     form = form.part(format!("file{}", i), f.to_part()?);
                 }
             }
-            form = form.text("payload_json", serde_json::to_string(&msg)?);
+            form = form.text("payload_json", serde_json::to_string(&msg).unexpected()?);
             r.post(route.as_str()).multipart(form)
         },
     }

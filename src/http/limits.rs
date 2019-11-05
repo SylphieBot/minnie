@@ -138,13 +138,11 @@ struct RateLimitHeaders {
 }
 fn parse_header<T: FromStr>(
     headers: &HeaderMap, name: &'static str,
-) -> Result<Option<T>> where <T as FromStr>::Err: Into<Error> {
+) -> Result<Option<T>> where <T as FromStr>::Err: Into<LibError> {
     match headers.get(name) {
         Some(header) => {
-            let header_str = header.to_str()
-                .context(ErrorKind::DiscordBadResponse("Invalid UTF-8 in header."))?;
-            let header = header_str.parse::<T>()
-                .context(ErrorKind::DiscordBadResponse("Could not parse header."))?;
+            let header_str = header.to_str().bad_response("Invalid UTF-8 in header.")?;
+            let header = header_str.parse::<T>().bad_response("Could not parse header.")?;
             Ok(Some(header))
         }
         None => Ok(None),
@@ -159,7 +157,7 @@ fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
     let remaining   = parse_header::<u32>(headers, "X-RateLimit-Remaining")?;
     let reset       = parse_header::<f64>(headers, "X-RateLimit-Reset")?;
     let reset_after = parse_header::<f64>(headers, "X-RateLimit-Reset-After")?;
-    let bucket      = headers.get("X-RateLimit-Bucket");
+    let bucket      = parse_header::<String>(headers, "X-RateLimit-Bucket")?;
     let any_limit   = limit.is_some() || remaining.is_some() || reset.is_some() ||
                       reset_after.is_some() || bucket.is_some();
     let all_limit   = limit.is_some() && remaining.is_some() && reset.is_some() &&
@@ -181,7 +179,7 @@ fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
             resets_at: UNIX_EPOCH + Duration::from_secs_f64(reset.unwrap()),
             resets_at_instant: now + resets_in,
             resets_in,
-            bucket: bucket.unwrap().to_str()?.to_string(),
+            bucket: bucket.unwrap(),
         }))
     } else {
         Ok(None)
@@ -206,7 +204,7 @@ async fn check_response(
     if let Some(client_token) = &client_token {
         request = request.header("Authorization", client_token.to_header_value());
     }
-    let mut response = request.send().compat().await?;
+    let mut response = request.send().compat().await.io_err("Failed to make API request.")?;
     if response.status().is_success() {
         let rate_info = parse_headers(&response)?;
         Ok(ResponseStatus::Success(rate_info, response))

@@ -233,7 +233,7 @@ pub enum GatewayPacket {
 impl GatewayPacket {
     pub fn from_json(
         s: &[u8], is_ignored: impl Fn(&GatewayEventType) -> bool,
-    ) -> Result<GatewayPacket> {
+    ) -> LibResult<GatewayPacket> {
         let seed = GatewayPacketSeed { is_ignored };
         match seed.deserialize(&mut serde_json::Deserializer::from_slice(s)) {
             Ok(v) => Ok(v),

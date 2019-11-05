@@ -7,7 +7,8 @@ use std::borrow::Cow;
 
 /// Performs operations relating to a Discord channel.
 ///
-/// Instances can be obtained by calling [`DiscordContext::channel`]
+/// Instances can be obtained by calling
+/// [`DiscordContext::channel`](`crate::DiscordContext::channel`).
 pub struct ChannelOps<'a> {
     pub(crate) id: ChannelId,
     pub(crate) raw: Routes<'a>,
@@ -28,7 +29,7 @@ impl <'a> ChannelOps<'a> {
     /// # use minnie::DiscordContext;
     /// # use minnie::Result;
     /// # use minnie::model::types::ChannelId;
-    /// async fn test_fn(ctx: DiscordContext, id: ChannelId) -> Result<()> {
+    /// async fn set_channel_name(ctx: DiscordContext, id: ChannelId) -> Result<()> {
     ///     ctx.channel(id).edit().name("foo").topic("bar").await?;
     ///     Ok(())
     /// }
@@ -42,7 +43,26 @@ impl <'a> ChannelOps<'a> {
         self.raw.delete_channel(self.id).await
     }
 
-
+    /// Retrieves the channel history.
+    ///
+    /// By default, returns the latest 50 messages to the channel. For more information on other
+    /// options for this API call, see the methods of [`GetMessageHistoryFut`]
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use minnie::DiscordContext;
+    /// # use minnie::Result;
+    /// # use minnie::model::types::ChannelId;
+    /// async fn print_messages(ctx: DiscordContext, id: ChannelId) -> Result<()> {
+    ///     println!("{:?}", ctx.channel(id).get_message_history().await?);
+    ///     println!("{:?}", ctx.channel(id).get_message_history().limit(100).await?);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn get_message_history(self) -> GetMessageHistoryFut<'a> {
+        GetMessageHistoryFut::new(self)
+    }
 
     /// Retrieves a message from the channel.
     pub async fn get_message(self, id: MessageId) -> Result<Message> {
@@ -133,11 +153,17 @@ fut_builder! {
     /// A future for a channel's message history.
     ///
     /// Instances can be obtained via [`ChannelOps::get_message_history`].
-    struct GetMessagesHistoryFut {
+    struct GetMessageHistoryFut {
         params: GetChannelMessagesParams<'a>,
     }
     into_async!(|ops, data| -> Result<Vec<Message>> {
         ops.raw.get_channel_messages(ops.id, data.params).await
     });
 
+    /// Sets the number of messages to return.
+    ///
+    /// Currently limited to 1-100 messages.
+    pub fn limit(&mut self, limit: u32) {
+        self.params.limit = Some(limit);
+    }
 }

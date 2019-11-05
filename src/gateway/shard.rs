@@ -9,6 +9,7 @@ use crate::gateway::model::*;
 use crate::model::event::*;
 use crate::model::types::*;
 use crate::ws::*;
+use crate::ws::Response::*;
 use crossbeam_channel::{self, Receiver, Sender};
 use futures::compat::*;
 use futures::task::{Spawn, SpawnExt};
@@ -236,12 +237,12 @@ async fn running_shard(
         match conn.receive(|s| GatewayPacket::from_json(s, |t|
             dispatch.ignores_event(gateway_ctx, t)
         ), Duration::from_secs(1)).await {
-            Ok(Some(GatewayPacket::Hello(packet))) if conn_phase == Initial => {
+            Ok(Packet(GatewayPacket::Hello(packet))) if conn_phase == Initial => {
                 heartbeat_interval = packet.heartbeat_interval;
                 heartbeat_ack = true;
                 need_connect = true;
             }
-            Ok(Some(GatewayPacket::InvalidSession(can_resume))) if conn_phase != Initial => {
+            Ok(Packet(GatewayPacket::InvalidSession(can_resume))) if conn_phase != Initial => {
                 if conn_phase == Authenticating {
                     emit_err!(GatewayError::AuthenticationFailure);
                 }
@@ -252,7 +253,7 @@ async fn running_shard(
                 Delay::new(Instant::now() + wait_time).compat().await.ok();
                 need_connect = true;
             }
-            Ok(Some(GatewayPacket::Dispatch(seq, t, data))) if conn_phase != Initial => {
+            Ok(Packet(GatewayPacket::Dispatch(seq, t, data))) if conn_phase != Initial => {
                 check_shutdown!();
                 conn_phase = Connected; // We assume we connected successfully if we got any event.
                 conn_successful = true;
@@ -274,19 +275,14 @@ async fn running_shard(
                     }
                 }
             }
-            Ok(Some(GatewayPacket::HeartbeatAck)) => heartbeat_ack = true,
-            Ok(Some(GatewayPacket::UnknownOpcode(v))) =>
+            Ok(Packet(GatewayPacket::HeartbeatAck)) => heartbeat_ack = true,
+            Ok(Packet(GatewayPacket::UnknownOpcode(v))) =>
                 emit_err!(GatewayError::UnknownOpcode(v), true),
-            Ok(Some(packet)) => emit_err!(GatewayError::UnexpectedPacket(packet), true),
-            Ok(None) => { }
-            Err(e) => match e.error_kind() {
-                ErrorKind::WebsocketDisconnected(cd) =>
-                    emit_err!(GatewayError::RemoteHostDisconnected(cd.clone())),
-                ErrorKind::PacketParseError =>
-                    emit_err!(GatewayError::PacketParseFailed(e), true),
-                _ =>
-                    emit_err!(GatewayError::WebsocketError(e)),
-            }
+            Ok(Packet(packet)) => emit_err!(GatewayError::UnexpectedPacket(packet), true),
+            Ok(TimeoutEncountered) => { }
+            Ok(ParseError(e)) => emit_err!(GatewayError::PacketParseFailed(e)),
+            Ok(Disconnected(e)) => emit_err!(GatewayError::RemoteHostDisconnected(e)),
+            Err(e) => emit_err!(GatewayError::WebsocketError(e)),
         }
 
         // Send packets to connect to the gateway.

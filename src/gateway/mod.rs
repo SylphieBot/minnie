@@ -111,7 +111,7 @@ impl <T: GatewayHandler> GatewayError<T> {
         }
     }
 
-    pub fn as_fail(&self) -> Option<&dyn Fail> {
+    pub fn as_error(&self) -> Option<&Error> {
         match self {
             GatewayError::ConnectionError(err) |
             GatewayError::WebsocketError(err) |
@@ -120,9 +120,18 @@ impl <T: GatewayHandler> GatewayError<T> {
             GatewayError::EventHandlingPanicked(err) |
             GatewayError::Panicked(err) =>
                 Some(err),
-            GatewayError::EventHandlingFailed(err) =>
-                Some(err),
             _ => None,
+        }
+    }
+    pub fn as_fail(&self) -> Option<&dyn Fail> {
+        if let Some(x) = self.as_error() {
+            Some(x)
+        } else {
+            match self {
+                GatewayError::EventHandlingFailed(err) =>
+                    Some(err),
+                _ => None,
+            }
         }
     }
 }

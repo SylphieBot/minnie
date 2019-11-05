@@ -17,7 +17,7 @@ pub mod model;
 mod ws;
 
 pub use context::*;
-pub use errors::*;
+pub use errors::{Error, ErrorKind};
 
 /// A set of reexports for more conveniently using the library.
 pub mod prelude {
