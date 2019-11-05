@@ -1,3 +1,5 @@
+//! Defines the error types used by Minnie.
+
 use failure::*;
 use flate2::DecompressError;
 use futures::FutureExt;
@@ -16,22 +18,32 @@ use websocket::{WebSocketError, CloseData};
 
 pub(crate) use std::result::{Result as StdResult};
 
+
+
+/// Represents the kind of error that occurred.
 #[derive(Fail, Debug)]
 #[non_exhaustive]
 pub enum ErrorKind {
-    #[fail(display = "Bot token is not valid: {}", _0)]
-    InvalidBotToken(&'static str),
+    /// Discord returned an unexpected or invalid response.
+    ///
+    /// This may happen if Discord is experiencing issues or the library hasn't been updated
+    /// for a change in Discord's protocol.
     #[fail(display = "Discord returned bad response: {}", _0)]
     DiscordBadResponse(&'static str),
+    /// An internal error has occurred. This generally indicates a big in the library.
     #[fail(display = "Internal error: {}", _0)]
     InternalError(&'static str),
-    #[fail(display = "Invalid input: {}", _0)]
-    InvalidInput(Cow<'static, str>),
+    #[fail(display = "Invalid API usage: {}", _0)]
+    InvalidInput(&'static str),
     #[fail(display = "{}", _0)]
     Panicked(Cow<'static, str>),
 
+    /// The gateway or voice websocket was disconnected.
     #[fail(display = "Websocket disconnected: {:?}", _0)]
     WebsocketDisconnected(Option<CloseData>),
+    /// A gateway or voice packet failed to parse.
+    ///
+    /// This may happen if the library hasn't been updated for a change in Discord's protocol.
     #[fail(display = "Failed to parse websocket packet.")]
     PacketParseError,
 
@@ -58,10 +70,10 @@ pub enum ErrorKind {
     WebSocketError(WebSocketError),
 }
 
-pub struct ErrorData {
-    pub kind: ErrorKind,
-    pub backtrace: Option<Backtrace>,
-    pub cause: Option<Box<dyn Fail>>,
+struct ErrorData {
+    kind: ErrorKind,
+    backtrace: Option<Backtrace>,
+    cause: Option<Box<dyn Fail>>,
 }
 
 pub(crate) fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
@@ -78,6 +90,7 @@ pub(crate) fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
     None
 }
 
+/// An error type used throughout the library.
 pub struct Error(Box<ErrorData>);
 impl Error {
     #[inline(never)] #[cold]
@@ -174,6 +187,7 @@ impl fmt::Display for Error {
     }
 }
 
+/// The result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;
 
 macro_rules! generic_from {

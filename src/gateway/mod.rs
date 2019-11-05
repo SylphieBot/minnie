@@ -367,7 +367,7 @@ impl GatewayController {
         // Initialize the new gateway object.
         let config = self.shared.config.read().clone();
         let ctx = self.ctx();
-        let endpoint = ctx.routes().get_gateway_bot().await?;
+        let endpoint = ctx.raw().get_gateway_bot().await?;
         let shard_count = match config.shard_count {
             Some(count) => count,
             None => endpoint.shards,

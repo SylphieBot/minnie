@@ -161,24 +161,38 @@ pub struct PartialChannel {
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct Channel {
-    pub id: CategoryId,
+    /// The ID of this channel.
+    pub id: ChannelId,
+    /// What type of channel this is.
     #[serde(rename = "type")]
     pub channel_type: ChannelType,
+    /// The guild this channel belongs to, if any.
     pub guild_id: Option<GuildId>,
+    /// The position of this channel within its category.
     pub position: Option<u32>,
+    /// The permission overwrites for this channel.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub permission_overwrites: Vec<PermissionOverwrite>,
+    /// The channel's name.
     pub name: Option<String>,
+    /// This channel's topic.
     pub topic: Option<String>,
+    /// Whether this channel should be considered NSFW.
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub nsfw: bool,
+    /// The ID of the last message sent in this channel.
     pub last_message_id: Option<MessageId>,
+    /// The bitrate of this (voice) channel. Ranges from 8000 to 96000, and up to 128000 for
+    /// VIP servers.
     pub bitrate: Option<u32>,
+    /// The user limit of this (voice) channel.
     pub user_limit: Option<u32>,
+    /// How many seconds a user has to wait before sending another message. Ranges from 0-21600.
     pub rate_limit_per_user: Option<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recipients: Vec<User>,
     pub icon: Option<String>,
+    /// The ID of the DM creator.
     pub owner_id: Option<UserId>,
     pub application_id: Option<ApplicationId>,
     pub parent_id: Option<CategoryId>,

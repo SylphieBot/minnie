@@ -18,8 +18,6 @@ mod model;
 use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
 pub use self::model::*;
 
-// TODO: Document routes.
-
 #[derive(Default, Debug)]
 pub(crate) struct RateLimits {
     global_limit: GlobalLimit,
@@ -29,24 +27,76 @@ pub(crate) struct RateLimits {
 
 /// Makes raw requests to Discord's API and handles rate limiting.
 ///
-/// Instances can be obtained by calling [`DiscordContext::routes`].
+/// Instances can be obtained by calling [`DiscordContext::raw`].
 #[derive(Clone, Debug)]
 pub struct Routes<'a> {
     ctx: &'a DiscordContext,
+    client_token: Option<DiscordToken>,
+    use_rate_limits: bool,
     reason: Option<String>,
 }
 impl DiscordContext {
-    pub fn routes(&self) -> Routes<'_> {
+    /// Returns a handle that allows making raw requests to the Discord API.
+    pub fn raw(&self) -> Routes<'_> {
         Routes { 
             ctx: self,
+            client_token: None,
+            use_rate_limits: false,
             reason: None,
         }
     }
 }
 impl <'a> Routes<'a> {
+    pub(crate) fn client_token_internal(&mut self, token: DiscordToken) {
+        self.use_rate_limits = token == self.ctx.data.client_token;
+        self.client_token = Some(token);
+    }
+    pub(crate) fn reason_internal(&mut self, reason: impl Into<String>) {
+        self.reason = Some(reason.into());
+    }
+
+    /// Overwrites the client token to use for the API call. Should generally be used for
+    /// making calls with Bearer tokens.
+    ///
+    /// Note that rate limits are only tracked for the bot's own user. The context will not
+    /// track remaining rate limits for other tokens, although it will still wait for rate
+    /// limits to end before retrying requests.
+    pub fn client_token(mut self, token: DiscordToken) -> Self {
+        self.client_token_internal(token);
+        self
+    }
+
     /// Sets the reason for the API call. This is recorded in the audit log for many calls.
-    pub fn reason<'c>(self, reason: impl Into<String>) -> Self {
-        Routes { reason: Some(reason.into()), ..self }
+    pub fn reason(mut self, reason: impl Into<String>) -> Self {
+        self.reason_internal(reason);
+        self
+    }
+}
+
+macro_rules! routes_wrapper {
+    ($ident_self:ident, $($routes_field:tt)*) => {
+        /// Overwrites the client token to use for the API call. Should generally be used for
+        /// making calls with Bearer tokens.
+        ///
+        /// Note that rate limits are only tracked for the bot's own user. The context will not
+        /// track remaining rate limits for other tokens, although it will still wait for rate
+        /// limits to end before retrying requests.
+        pub fn client_token(mut $ident_self, token: DiscordToken) -> Self {
+            {
+                let ptr = $($routes_field)*;
+                ptr.client_token_internal(token);
+            }
+            $ident_self
+        }
+
+        /// Sets the reason for the API call. This is recorded in the audit log for many calls.
+        pub fn reason(mut $ident_self, reason: impl Into<String>) -> Self {
+            {
+                let ptr = &mut $($routes_field)*;
+                ptr.reason_internal(reason);
+            }
+            $ident_self
+        }
     }
 }
 
@@ -95,21 +145,23 @@ macro_rules! routes {
                 $(rate_id = $rate_id.into();)?
                 $(let $let_name $(: $let_ty)? = $let_expr;)*
                 $(let __route = route!($($route)*);)?
-                let Routes { ctx, reason } = self;
+                let Routes { ctx, client_token, use_rate_limits, reason } = self;
                 let mut _response = ctx.data.rate_limits.routes.$name.perform_rate_limited(
-                    &self.ctx.data.rate_limits.global_limit,
-                    &self.ctx.data.rate_limits.buckets_store,
-                    $(move || {
+                    &ctx.data.rate_limits.global_limit,
+                    &ctx.data.rate_limits.buckets_store,
+                    use_rate_limits,
+                    $(&move || {
                         Ok(
                             ctx.data.http_client.$method(__route.as_str())
                             $(.json($json))? $(.query($query))?
                         )
                     },)?
-                    $(move || {
+                    $(&move || {
                         let $full_request_match = &ctx.data.http_client;
                         Ok($full_request)
                     },)?
                     reason,
+                    client_token,
                     rate_id,
                 ).await?;
                 Ok(($(_response.json::<$ty>().compat().await?)?))

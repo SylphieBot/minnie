@@ -8,15 +8,18 @@ edition = "2018"
 opt-level = 3
 lto = true
 
+[features]
+nightly = []
+
 [dependencies]
-base64 = "0.10.1"
+base64 = "0.11.0"
 chrono = { version = "0.4", features = ["serde"] }
 crossbeam-channel = "0.3"
 derivative = "1.0.2"
 derive_setters = "0.1.0"
-enumset = { version = "0.4.0", features = ["serde", "nightly"] }
+enumset = { version = "0.4.0", features = ["serde"] }
 failure = "0.1.5"
-futures01 = { package = "futures", version = "0.1.21", features = ["nightly"] }
+futures01 = { package = "futures", version = "0.1.21" }
 futures-preview = { version = "=0.3.0-alpha.19", features = ["compat", "io-compat", "async-await"] }
 flate2 = { version = "1.0.7", default-features = false, features = ["rust_backend"] }
 lazy_static = "1.4.0"
@@ -37,7 +40,7 @@ twox-hash = "1.5"
 url = "1.7.2"
 webpki = "0.21"
 webpki-roots = "0.18"
-websocket = { version = "0.23.0", default-features = false, features = ["async", "nightly"] }
+websocket = { version = "0.23.0", default-features = false, features = ["async"] }
 
 [dev-dependencies]
 simple_logger = "1.0.1"

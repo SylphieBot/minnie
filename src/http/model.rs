@@ -43,19 +43,30 @@ pub struct GetGatewayBot {
 #[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct ModifyChannelParams<'a> {
+    /// The channel's name.
     #[setters(into)]
     pub name: Option<Cow<'a, str>>,
+    /// The position of this channel within its category.
     pub position: Option<u32>,
+    /// This channel's topic.
     #[setters(into)]
     pub topic: Option<Cow<'a, str>>,
+    /// Whether this channel should be considered NSFW.
     pub nsfw: Option<bool>,
+    /// How many seconds a user has to wait before sending another message. Ranges from 0-21600.
+    /// A value of zero represents no rate limit.
     pub rate_limit_per_user: Option<u32>,
+    /// The bitrate of this (voice) channel. Ranges from 8000 to 96000, and up to 128000 for
+    /// VIP servers.
     pub bitrate: Option<u32>,
+    /// The user limit of this (voice) channel.
     pub user_limit: Option<u32>,
+    /// The permission overwrites for this channel.
     #[setters(into)]
     pub permission_overwrites: Option<Cow<'a, [PermissionOverwrite]>>,
+    /// The category this channel belongs to.
     #[setters(into)]
-    pub parent_id: Option<ChannelId>,
+    pub parent_id: Option<Option<ChannelId>>,
 }
 new_from_default!(ModifyChannelParams);
 
@@ -118,7 +129,8 @@ impl <'a> CreateMessageFile<'a> {
     }
     pub(crate) fn to_part(&self) -> Result<Part> {
         Ok(Part::bytes(self.contents.clone().into_owned())
-            .mime_str(&*self.mime_type)?
+            .mime_str(&*self.mime_type)
+            .context(ErrorKind::InvalidInput("Invalid MIME type in uploaded file."))?
             .file_name(self.file_name.clone().into_owned()))
     }
 }

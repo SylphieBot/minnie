@@ -125,16 +125,16 @@ macro_rules! new_from_str {
 #[non_exhaustive]
 pub struct EmbedFooter<'a> {
 	#[setters(into)]
-	pub name: Cow<'a, str>,
+	pub text: Cow<'a, str>,
 	#[setters(into)]
 	pub icon_url: Option<Cow<'a, str>>,
 	#[setters(skip)]
 	pub proxy_icon_url: Option<Cow<'a, str>>,
 }
 impl <'a> EmbedFooter<'a> {
-	pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
+	pub fn new(text: impl Into<Cow<'a, str>>) -> Self {
 		EmbedFooter {
-			name: name.into(), icon_url: None, proxy_icon_url: None,
+			text: text.into(), icon_url: None, proxy_icon_url: None,
 		}
 	}
 }

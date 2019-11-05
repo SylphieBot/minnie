@@ -59,13 +59,13 @@ impl DiscordToken {
 
         let tok_data = if has_bot { &tok[4..] } else { &tok };
         let split: Vec<_> = tok_data.split('.').collect();
-        ensure!(split.len() == 3, InvalidBotToken, "Tokens consist of 3 sections separated by '.'");
+        ensure!(split.len() == 3, InvalidInput, "Tokens consist of 3 sections separated by '.'");
         for section in split {
-            ensure!(section.len() >= 1, InvalidBotToken, "Segments cannot be empty.");
+            ensure!(section.len() >= 1, InvalidInput, "Segments cannot be empty.");
             for char in section.chars() {
                 match char {
                     'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' => { }
-                    _ => bail!(InvalidBotToken, "Token segments can only contain [a-zA-Z0-9_-]"),
+                    _ => bail!(InvalidInput, "Token segments can only contain [a-zA-Z0-9_-]"),
                 }
             }
         }
@@ -81,7 +81,7 @@ impl DiscordToken {
     /// Creates a new OAuth Bearer token, and checks it for validity.
     pub fn from_bearer(tok: impl ToString) -> Result<DiscordToken> {
         let tok = tok.to_string();
-        ensure!(tok.starts_with("Bearer "), InvalidBotToken, "Invalid Bearer token.");
+        ensure!(tok.starts_with("Bearer "), InvalidInput, "Invalid Bearer token.");
         Ok(DiscordToken(tok.into()))
     }
 

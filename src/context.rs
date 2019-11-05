@@ -1,6 +1,7 @@
+//!
+
 use crate::errors::*;
 use crate::gateway::{GatewayController, GatewayConfig, PresenceUpdate};
-use crate::http::RateLimits;
 use crate::model::types::{DiscordToken, Snowflake};
 use crate::serde::*;
 use derive_setters::*;
@@ -25,7 +26,7 @@ pub(crate) struct DiscordContextData {
     pub http_user_agent: Cow<'static, str>,
     pub client_token: DiscordToken,
     pub http_client: Client,
-    pub rate_limits: RateLimits,
+    pub rate_limits: crate::http::RateLimits,
     #[derivative(Debug="ignore")]
     pub rustls_connector: TlsConnector,
     #[derivative(Debug="ignore")]
@@ -151,7 +152,7 @@ impl DiscordContextBuilder {
             library_name, http_user_agent,
             client_token: self.client_token,
             http_client,
-            rate_limits: RateLimits::default(),
+            rate_limits: Default::default(),
             rustls_connector: TlsConnector::from(Arc::new(rustls_config)),
             gateway: GatewayController::new(self.default_presence, self.gateway_config),
         });

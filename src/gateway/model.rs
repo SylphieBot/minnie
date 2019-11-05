@@ -55,11 +55,12 @@ impl From<UserStatus> for PresenceUpdate {
 #[non_exhaustive]
 pub struct GuildMembersRequest {
     #[setters(rename = "guild_ids", into)]
-    pub guild_id: Option<Vec<GuildId>>,
+    pub guild_id: Vec<GuildId>,
     #[setters(into)]
-    pub query: Option<String>,
-    pub limit: Option<u32>,
-    pub presences: Option<bool>,
+    pub query: String,
+    pub limit: u32,
+    #[setters(bool)]
+    pub presences: bool,
     #[setters(into)]
     pub user_ids: Option<Vec<UserId>>,
 }
@@ -71,16 +72,16 @@ impl GuildMembersRequest {
     /// Adds a guild to request members from.
     ///
     /// See [`guild_id`](`#structfield.guild_id`).
-    pub fn guild_id(mut self, id: GuildId) -> Self {
-        self.guild_id.push(id);
+    pub fn guild_id(mut self, id: impl Into<GuildId>) -> Self {
+        self.guild_id.push(id.into());
         self
     }
 
     /// Adds a user to request information about.
     ///
     /// See [`user_ids`](`#structfield.user_ids`).
-    pub fn user_id(mut self, id: UserId) -> Self {
-        self.user_ids.push(id);
+    pub fn user_id(mut self, id: impl Into<UserId>) -> Self {
+        self.user_ids.push(id.into());
         self
     }
 }

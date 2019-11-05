@@ -1,5 +1,5 @@
 use crate::errors::*;
-use crate::model::types::Snowflake;
+use crate::model::types::{Snowflake, DiscordToken};
 use crate::serde::*;
 use futures::compat::*;
 use parking_lot::Mutex;
@@ -18,7 +18,6 @@ use tokio::timer::Delay;
 use failure::_core::fmt::Debug;
 
 // TODO: Add support for garbage collecting old channels and guilds.
-// TODO: Add error contexts.
 
 /// A struct representing a rate limited API call.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -111,7 +110,7 @@ async fn check_global_wait(global_limit: &GlobalLimit) -> bool {
     };
 
     if let Some(time) = time {
-        debug!("Waiting for preexisting global rate limit until {:?}", time);
+        trace!("Waiting for preexisting global rate limit until {:?}", time);
         wait_until(time).await;
         true
     } else {
@@ -122,7 +121,7 @@ fn check_route_wait(lock: &mut RawRateLimit) -> impl Future<Output = bool> {
     let time = lock.check_wait_until();
     async move {
         if let Some(time) = time {
-            debug!("Waiting for preexisting route rate limit until {:?}", time);
+            trace!("Waiting for preexisting route rate limit until {:?}", time);
             wait_until(time).await;
             true
         } else {
@@ -198,18 +197,23 @@ enum ResponseStatus {
 async fn check_response(
     request: RequestBuilder,
     reason: &Option<String>,
+    client_token: &Option<DiscordToken>,
 ) -> Result<ResponseStatus> {
     let mut request = request.header("X-RateLimit-Precision", "millisecond");
     if let Some(reason) = &reason {
         request = request.header("X-Audit-Log-Reason", reason);
+    }
+    if let Some(client_token) = &client_token {
+        request = request.header("Authorization", client_token.to_header_value());
     }
     let mut response = request.send().compat().await?;
     if response.status().is_success() {
         let rate_info = parse_headers(&response)?;
         Ok(ResponseStatus::Success(rate_info, response))
     } else if response.status() == StatusCode::TOO_MANY_REQUESTS {
-        let rate_info = response.json::<RateLimited>().compat().await?;
-        debug!("Encountered rate limit: {:?}", rate_info);
+        let rate_info = response.json::<RateLimited>().compat().await
+            .context(ErrorKind::DiscordBadResponse("Could not parse rate limit information."))?;
+        trace!("Encountered rate limit: {:?}", rate_info);
         if rate_info.global {
             Ok(ResponseStatus::GloballyRateLimited(rate_info.retry_after))
         } else {
@@ -292,24 +296,34 @@ impl RateLimitRoute {
         &self,
         global_limit: &GlobalLimit,
         store: &RateLimitStore,
-        make_request: impl Fn() -> Result<RequestBuilder>,
+        use_rate_limits: bool,
+        make_request: &(dyn Fn() -> Result<RequestBuilder> + Send + Sync),
         reason: Option<String>,
+        client_token: Option<DiscordToken>,
         id: Snowflake,
     ) -> Result<Response> {
         loop {
-            self.check_wait(global_limit, id).await;
-            match check_response(make_request()?, &reason).await? {
+            if use_rate_limits {
+                self.check_wait(global_limit, id).await;
+            }
+            match check_response(make_request()?, &reason, &client_token).await? {
                 ResponseStatus::Success(rate_limit, response) => {
-                    self.push_rate_info(rate_limit, store, id);
+                    if use_rate_limits {
+                        self.push_rate_info(rate_limit, store, id);
+                    }
                     return Ok(response)
                 }
                 ResponseStatus::RateLimited(rate_limit, wait_duration) => {
-                    self.push_rate_info(rate_limit, store, id);
+                    if use_rate_limits {
+                        self.push_rate_info(rate_limit, store, id);
+                    }
                     wait_until(Instant::now() + wait_duration).await;
                 }
                 ResponseStatus::GloballyRateLimited(wait_duration) => {
                     let time = Instant::now() + wait_duration;
-                    push_global_rate_limit(global_limit, time);
+                    if use_rate_limits {
+                        push_global_rate_limit(global_limit, time);
+                    }
                     wait_until(time).await;
                 }
             }
