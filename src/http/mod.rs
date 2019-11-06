@@ -14,12 +14,14 @@ use serde_json;
 
 mod limits;
 mod model;
+mod status;
 
 use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
 pub use self::model::*;
 
 #[doc(inline)]
-pub use reqwest::StatusCode;
+pub use reqwest::{StatusCode as HttpStatusCode};
+pub use self::status::DiscordErrorCode;
 
 #[derive(Default, Debug)]
 pub(crate) struct RateLimits {

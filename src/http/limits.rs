@@ -16,6 +16,7 @@ use reqwest::r#async::{Response, RequestBuilder};
 use reqwest::header::*;
 use tokio::timer::Delay;
 use failure::_core::fmt::Debug;
+use crate::http::{DiscordError, DiscordErrorCode};
 
 // TODO: Add support for garbage collecting old channels and guilds.
 
@@ -218,8 +219,12 @@ async fn check_response(
             Ok(ResponseStatus::RateLimited(parse_headers(&response)?, rate_info.retry_after))
         }
     } else {
-        // TODO: Handle other HTTP errors.
-        unimplemented!()
+        let status = response.status();
+        let discord_error = match response.json::<DiscordError>().compat().await {
+            Ok(v) => v,
+            Err(_) => DiscordError { code: DiscordErrorCode::NoStatusSent, message: None },
+        };
+        Err(Error::new_with_backtrace(ErrorKind::RequestFailed(status, discord_error)))
     }
 }
 

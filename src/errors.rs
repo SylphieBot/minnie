@@ -1,9 +1,10 @@
 //! Defines the error types used by Minnie.
 
+use crate::http::{DiscordError, HttpStatusCode};
 use failure::*;
 use flate2::DecompressError;
 use futures::FutureExt;
-use reqwest::{Error as ReqwestError, StatusCode};
+use reqwest::{Error as ReqwestError};
 use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
 use serde_json::{Error as SerdeJsonError};
 use std::any::Any;
@@ -81,8 +82,8 @@ pub enum ErrorKind {
     #[fail(display = "Discord returned bad response: {}", _0)]
     DiscordBadResponse(&'static str),
     /// Discord returned an error status code.
-    #[fail(display = "Request failed with {}", _0)]
-    RequestFailed(StatusCode),
+    #[fail(display = "Request failed with {} ({})", _0, _1)]
+    RequestFailed(HttpStatusCode, DiscordError),
 }
 
 struct ErrorData {
