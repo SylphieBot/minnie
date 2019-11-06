@@ -4,9 +4,14 @@
 //! methods on [`DiscordContext`].
 
 use crate::context::*;
+use crate::model::channel::{Channel, PartialChannel};
+use crate::model::message::Message;
 use crate::model::types::*;
 
 // TODO: Additional validation if practical
+// TODO: Create iterators based on the various get_* functions.
+// TODO: Consider adding helper methods on Message, Channel, etc.
+// TODO: Consider splitting MessageOps from ChannelOps?
 
 macro_rules! fut_builder {
     (
@@ -20,8 +25,8 @@ macro_rules! fut_builder {
         });
         $(
             $(#[$fn_meta:meta])*
-            pub fn $fn_name:ident(
-                &mut self, $($param_name:ident: $param_ty:ty),* $(,)?
+            $fn_vis:vis fn $fn_name:ident(
+                &mut self $(, $param_name:ident: $param_ty:ty)* $(,)?
             ) {
                 $($fn_body:tt)*
             }
@@ -123,7 +128,8 @@ macro_rules! fut_builder {
                 $(
                     $(#[$fn_meta])*
                     #[allow(unused_mut)]
-                    pub fn $fn_name(mut self, $($param_name: $param_ty,)*) -> Self {
+                    #[allow(dead_code)]
+                    $fn_vis fn $fn_name(mut self, $($param_name: $param_ty,)*) -> Self {
                         self.retrieve_builder().$fn_name($($param_name,)*);
                         self
                     }
@@ -150,5 +156,30 @@ impl DiscordContext {
     /// Performs operations relating to a Discord channel.
     pub fn channel(&self, id: impl Into<ChannelId>) -> ChannelOps<'_> {
         ChannelOps { id: id.into(), raw: self.raw() }
+    }
+
+    /// Performs operations relating to a message.
+    pub fn message(
+        &self, channel: impl Into<ChannelId>, message: impl Into<MessageId>,
+    ) -> MessageOps<'_> {
+        MessageOps { channel_id: channel.into(), message_id: message.into(), raw: self.raw() }
+    }
+}
+impl Channel {
+    /// Performs operations on this channel.
+    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> ChannelOps<'a> {
+        ChannelOps { id: self.id, raw: ctx.raw() }
+    }
+}
+impl PartialChannel {
+    /// Performs operations on this channel.
+    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> ChannelOps<'a> {
+        ChannelOps { id: self.id, raw: ctx.raw() }
+    }
+}
+impl Message {
+    /// Performs operations on this message.
+    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> MessageOps<'a> {
+        MessageOps { channel_id: self.channel_id, message_id: self.id, raw: ctx.raw() }
     }
 }

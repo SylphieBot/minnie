@@ -2,6 +2,7 @@
 
 use crate::errors::*;
 use crate::gateway::{GatewayController, GatewayConfig, PresenceUpdate};
+use crate::http::{HttpConfig, RateLimits};
 use crate::model::types::{DiscordToken, Snowflake};
 use crate::serde::*;
 use derive_setters::*;
@@ -22,13 +23,16 @@ pub struct DiscordContextId(pub Snowflake);
 pub(crate) struct DiscordContextData {
     pub context_id: DiscordContextId,
     pub unique_context_id: DiscordContextId,
+
     pub library_name: Cow<'static, str>,
     pub http_user_agent: Cow<'static, str>,
     pub client_token: DiscordToken,
+
     pub http_client: Client,
     pub rate_limits: crate::http::RateLimits,
     #[derivative(Debug="ignore")]
     pub rustls_connector: TlsConnector,
+
     #[derivative(Debug="ignore")]
     pub gateway: GatewayController,
 }
@@ -84,25 +88,22 @@ impl DiscordContext {
 pub struct DiscordContextBuilder {
     /// Sets the client token for this builder.
     client_token: DiscordToken,
-
     /// Sets the context ID for the bot.
     ///
     /// This allows [`DiscordContext::id`] to represent a particular bot token in a multi-process
     /// bot, and [`DiscordContext::unique_id`] to represent a particular process of a particular
     /// bot.
     context_id: Option<DiscordContextId>,
-
     /// Sets the library name reported to the Discord API.
     library_name: Option<String>,
-
     /// Sets the user agent used in HTTP requests made by the bot.
     http_user_agent: Option<String>,
-
     /// Sets the presence sent to the Discord gateway.
     default_presence: PresenceUpdate,
-
     /// Sets the configuration of the gateway.
     gateway_config: GatewayConfig,
+    /// Configures how the bot will make HTTP requests.
+    http_config: HttpConfig,
 }
 impl DiscordContextBuilder {
     fn new(client_token: DiscordToken) -> Self {
@@ -113,6 +114,7 @@ impl DiscordContextBuilder {
             client_token,
             default_presence: PresenceUpdate::default(),
             gateway_config: GatewayConfig::default(),
+            http_config: HttpConfig::default(),
         }
     }
 
@@ -154,7 +156,7 @@ impl DiscordContextBuilder {
             library_name, http_user_agent,
             client_token: self.client_token,
             http_client,
-            rate_limits: Default::default(),
+            rate_limits: RateLimits::new(self.http_config),
             rustls_connector: TlsConnector::from(Arc::new(rustls_config)),
             gateway: GatewayController::new(self.default_presence, self.gateway_config),
         });

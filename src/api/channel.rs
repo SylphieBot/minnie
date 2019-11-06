@@ -3,12 +3,15 @@ use crate::http::*;
 use crate::model::channel::*;
 use crate::model::message::*;
 use crate::model::types::*;
+use futures::future::try_join_all;
 use std::borrow::Cow;
 
 /// Performs operations relating to a Discord channel.
 ///
 /// Instances can be obtained by calling
-/// [`DiscordContext::channel`](`crate::DiscordContext::channel`).
+/// [`DiscordContext::channel`](`crate::DiscordContext::channel`),
+/// [`Channel::ops`], or [`PartialChannel::ops`].
+#[derive(Debug, Clone)]
 pub struct ChannelOps<'a> {
     pub(crate) id: ChannelId,
     pub(crate) raw: Routes<'a>,
@@ -64,9 +67,112 @@ impl <'a> ChannelOps<'a> {
         GetMessageHistoryFut::new(self)
     }
 
-    /// Retrieves a message from the channel.
-    pub async fn get_message(self, id: MessageId) -> Result<Message> {
-        self.raw.get_channel_message(self.id, id).await
+    /// Performs operations relating to a message.
+    pub async fn message(self, id: impl Into<MessageId>) -> MessageOps<'a> {
+        MessageOps { channel_id: self.id, message_id: id.into(), raw: self.raw }
+    }
+
+    /// Posts a message to this channel.
+    ///
+    /// TODO: Further documentation
+    pub fn post(self) -> PostFut<'a> {
+        PostFut::new(self)
+    }
+
+    /// Deletes a list of messages.
+    pub async fn delete_messages(self, messages: impl Into<Cow<'a, [MessageId]>>) -> Result<()> {
+        let messages = messages.into();
+        if messages.len() == 1 {
+            self.raw.delete_message(self.id, messages[0]).await?;
+        } else if messages.len() <= 100 {
+            self.raw.bulk_delete_message(self.id, &messages).await?;
+        } else {
+            let mut delete_futs = Vec::new();
+            for chunk in messages.chunks(100) {
+                delete_futs.push(self.raw.clone().bulk_delete_message(self.id, chunk));
+            }
+            try_join_all(delete_futs).await?;
+        }
+        Ok(())
+    }
+
+    // TODO: Edit Channel Permissions
+
+    /// Retrieves a list of invites to this channel.
+    pub async fn get_invites(self) -> Result<Vec<InviteWithMetadata>> {
+        self.raw.get_channel_invites(self.id).await
+    }
+
+    // TODO: Create Channel Invite
+    // TODO: Delete Channel Permission
+
+    /// Triggers the typing indicator.
+    pub async fn typing(self) -> Result<()> {
+        self.raw.trigger_typing_indicator(self.id).await
+    }
+
+    /// Retrieves a list of messages pinned to this channel.
+    pub async fn get_pinned_messages(self) -> Result<Vec<Message>> {
+        self.raw.get_pinned_messages(self.id).await
+    }
+
+    routes_wrapper!(self, &mut self.raw);
+}
+
+/// Performs operations relating to a message.
+///
+/// Instances can be obtained by calling
+/// [`DiscordContext::message`](`crate::DiscordContext::message`),
+/// [`ChannelOps::message`] or [`Message::ops`].
+#[derive(Debug, Clone)]
+pub struct MessageOps<'a> {
+    pub(crate) channel_id: ChannelId,
+    pub(crate) message_id: MessageId,
+    pub(crate) raw: Routes<'a>,
+}
+impl <'a> MessageOps<'a> {
+    /// Retrieves information relating to this message.
+    pub async fn get(self) -> Result<Message> {
+        self.raw.get_channel_message(self.channel_id, self.message_id).await
+    }
+
+    /// Reacts to this message.
+    pub async fn react(self, emoji: &EmojiRef) -> Result<()> {
+        self.raw.create_reaction(self.channel_id, self.message_id, emoji).await
+    }
+
+    /// Removes the bot's reaction to this message.
+    pub async fn delete_own_reaction(self, emoji: &EmojiRef) -> Result<()> {
+        self.raw.delete_own_reaction(self.channel_id, self.message_id, emoji).await
+    }
+
+    /// Removes another user's reaction to this message.
+    pub async fn delete_reaction(self, emoji: &EmojiRef, user: UserId) -> Result<()> {
+        self.raw.delete_user_reaction(self.channel_id, self.message_id, emoji, user).await
+    }
+
+    // TODO: Get Reactions
+
+    /// Deletes all reactions from a message.
+    pub async fn clear_reactions(self) -> Result<()> {
+        self.raw.delete_all_reactions(self.channel_id, self.message_id).await
+    }
+
+    // TODO: Edit Message
+
+    /// Deletes this message.
+    pub async fn delete(self) -> Result<()> {
+        self.raw.delete_message(self.channel_id, self.message_id).await
+    }
+
+    /// Pins this message to its channel.
+    pub async fn pin(self) -> Result<()> {
+        self.raw.add_pinned_channel_message(self.channel_id, self.message_id).await
+    }
+
+    /// Unpins this message from its channel.
+    pub async fn unpin(self) -> Result<()> {
+        self.raw.delete_pinned_channel_message(self.channel_id, self.message_id).await
     }
 
     routes_wrapper!(self, &mut self.raw);
@@ -110,12 +216,12 @@ fut_builder! {
     }
 
     /// Sets the number of seconds users in this channel must wait before posting another message.
-    /// A value of 0 represents no rate limit.
+    /// A value of 0 represents no slow mode.
     ///
     /// Currently limited to 0-21600 seconds.
     ///
     /// Only available for text channels.
-    pub fn rate_limit(&mut self, rate_limit: u32) {
+    pub fn slow_mode(&mut self, rate_limit: u32) {
         self.params.rate_limit_per_user = Some(rate_limit);
     }
 
@@ -142,8 +248,8 @@ fut_builder! {
     }
 
     /// Sets the category this channel is in.
-    pub fn category(&mut self, parent: Option<ChannelId>) {
-        self.params.parent_id = Some(parent);
+    pub fn category(&mut self, parent: Option<impl Into<ChannelId>>) {
+        self.params.parent_id = Some(parent.map(Into::into));
     }
 }
 
@@ -157,13 +263,87 @@ fut_builder! {
         params: GetChannelMessagesParams<'a>,
     }
     into_async!(|ops, data| -> Result<Vec<Message>> {
+        if (data.params.around.is_some() && data.params.after.is_some()) ||
+           (data.params.before.is_some() && data.params.after.is_some()) ||
+           (data.params.around.is_some() && data.params.before.is_some())
+        {
+            bail!(InvalidInput, "Can only set one of `around`, `before`, and `after.");
+        }
+
         ops.raw.get_channel_messages(ops.id, data.params).await
     });
 
+    /// Gets messages around the message ID.
+    ///
+    /// Mutually exclusive with `before` and `after.`
+    pub fn around(&mut self, id: impl Into<MessageId>) {
+        self.params.around = Some(id.into());
+    }
+
+    /// Gets messages before the message ID.
+    ///
+    /// Mutually exclusive with `around` and `after.`
+    pub fn before(&mut self, id: impl Into<MessageId>) {
+        self.params.before = Some(id.into());
+    }
+
+    /// Gets messages after the message ID.
+    ///
+    /// Mutually exclusive with `around` and `before.`
+    pub fn after(&mut self, id: impl Into<MessageId>) {
+        self.params.after = Some(id.into());
+    }
+
     /// Sets the number of messages to return.
     ///
-    /// Currently limited to 1-100 messages.
+    /// Currently limited to 1-100 messages. Defaults to 50 messages.
     pub fn limit(&mut self, limit: u32) {
         self.params.limit = Some(limit);
+    }
+}
+
+fut_builder! {
+    ('a, post_fut, ChannelOps, self)
+
+    /// A future for posting a new message.
+    ///
+    /// Instances can be obtained via [`ChannelOps::post`].
+    struct PostFut {
+        params: CreateMessageParams<'a>,
+        files: Vec<CreateMessageFile<'a>>,
+    }
+    into_async!(|ops, data| -> Result<Message> {
+        if data.files.is_empty() && data.params.content.is_none() && data.params.embed.is_none() {
+            bail!(InvalidInput, "At least one of `content` or `embed` must be set, or a file must \
+                                 be uploaded.");
+        }
+        ops.raw.create_message(ops.id, data.params, data.files).await
+    });
+
+    /// Sets the content of the post.
+    pub fn content(&mut self, content: impl Into<Cow<'a, str>>) {
+        self.params.content = Some(content.into());
+    }
+
+    /// Sets the nonce for this post.
+    ///
+    /// TODO: Elaborate
+    pub fn nonce(&mut self, nonce: impl Into<MessageNonce>) {
+        self.params.nonce = Some(nonce.into());
+    }
+
+    /// Enables text to speech for this message.
+    pub fn tts(&mut self) {
+        self.params.tts = true;
+    }
+
+    /// Sets the embed of the post.
+    pub fn embed(&mut self, embed: impl Into<Embed<'a>>) {
+        self.params.embed = Some(embed.into());
+    }
+
+    /// Attaches a file to the message.
+    pub fn file(&mut self, file: CreateMessageFile<'a>) {
+        self.files.push(file);
     }
 }

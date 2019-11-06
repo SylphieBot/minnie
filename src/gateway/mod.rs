@@ -4,12 +4,13 @@ use crate::context::DiscordContext;
 use crate::errors::*;
 use crate::model::event::*;
 use crate::model::types::*;
+use derive_setters::*;
 use failure::Fail;
+use fnv::FnvHashMap;
 use futures::compat::*;
 use futures::task::Spawn;
 use parking_lot::{Mutex, RwLock};
 use rand::Rng;
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -283,7 +284,7 @@ impl ShardFilter {
 }
 
 /// Stores settings for a gateway.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Setters)]
 #[non_exhaustive]
 pub struct GatewayConfig {
     /// The number of shards to connect with. Uses the count suggested by Discord if `None`.
@@ -315,6 +316,11 @@ pub struct GatewayConfig {
     /// The maximum amount of time to randomly add between connection attempts.
     pub backoff_variation: Option<Duration>,
 }
+impl GatewayConfig {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
 impl Default for GatewayConfig {
     fn default() -> Self {
         GatewayConfig {
@@ -333,7 +339,7 @@ impl Default for GatewayConfig {
 struct CurrentGateway {
     shared: Arc<shard::GatewayState>,
     shards: Vec<Arc<shard::ShardState>>,
-    shard_id_map: HashMap<ShardId, usize>,
+    shard_id_map: FnvHashMap<ShardId, usize>,
 }
 impl CurrentGateway {
     async fn wait_shutdown(&self) {
@@ -385,7 +391,7 @@ impl GatewayController {
         let gateway = Arc::new(shard::GatewayState::new(&endpoint.url, self.shared.clone()));
 
         let mut shards = Vec::new();
-        let mut shard_id_map = HashMap::new();
+        let mut shard_id_map = FnvHashMap::default();
         for id in 0..shard_count {
             if config.shard_filter.accepts_shard(id) {
                 let id = ShardId(id, shard_count);

@@ -8,9 +8,12 @@ use crate::model::message::*;
 use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
+use derive_setters::*;
 use futures::compat::*;
+use parking_lot::Mutex;
 use reqwest::r#async::multipart::Form;
 use serde_json;
+use std::time::Duration;
 
 mod limits;
 mod model;
@@ -23,11 +26,54 @@ pub use self::model::*;
 pub use reqwest::{StatusCode as HttpStatusCode};
 pub use self::status::DiscordErrorCode;
 
-#[derive(Default, Debug)]
+const SENTINEL: Snowflake = Snowflake(0);
+
+/// Stores settings for a gateway.
+#[derive(Clone, Debug, Setters)]
+#[non_exhaustive]
+pub struct HttpConfig {
+    /// The maximum amount of time an expired rate limit is allowed to remain for.
+    pub max_rate_limit_expired_period: Duration,
+    /// How often to check for expired rate limits.
+    pub clear_rate_limits_period: Duration,
+    /// How often to forcefully update the per-bucket estimated limits.
+    pub estimated_limits_expiry: Duration,
+    /// How often to shrink the size of the underlying caches for rate limits.
+    pub reallocate_caches_period: Duration,
+    /// The maximum amount of time to wait on rate limits to update from in-progress API calls.
+    pub max_wait_for_active: Duration,
+}
+impl HttpConfig {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+impl Default for HttpConfig {
+    fn default() -> Self {
+        HttpConfig {
+            max_rate_limit_expired_period: Duration::from_secs(60),
+            clear_rate_limits_period: Duration::from_secs(60),
+            estimated_limits_expiry: Duration::from_secs(60),
+            reallocate_caches_period: Duration::from_secs(60 * 10),
+            max_wait_for_active: Duration::from_secs_f32(0.5),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct RateLimits {
     global_limit: GlobalLimit,
-    buckets_store: RateLimitStore,
+    buckets_store: Mutex<RateLimitStore>,
     routes: RouteRateLimits,
+}
+impl RateLimits {
+    pub(crate) fn new(config: HttpConfig) -> Self {
+        RateLimits {
+            global_limit: Default::default(),
+            buckets_store: Mutex::new(RateLimitStore::new(config)),
+            routes: Default::default(),
+        }
+    }
 }
 
 /// Makes raw requests to Discord's API and handles rate limiting.
@@ -46,7 +92,7 @@ impl DiscordContext {
         Routes { 
             ctx: self,
             client_token: None,
-            use_rate_limits: false,
+            use_rate_limits: true,
             reason: None,
         }
     }
@@ -63,9 +109,8 @@ impl <'a> Routes<'a> {
     /// Overwrites the client token to use for the API call. Should generally be used for
     /// making calls with Bearer tokens.
     ///
-    /// Note that rate limits are only tracked for the bot's own user. The context will not
-    /// track remaining rate limits for other tokens, although it will still wait for rate
-    /// limits to end before retrying requests.
+    /// The context will not track remaining rate limits for other tokens other than the
+    /// bot's own, although it will still wait for rate limits to end before retrying requests.
     pub fn client_token(mut self, token: DiscordToken) -> Self {
         self.client_token_internal(token);
         self
@@ -83,9 +128,8 @@ macro_rules! routes_wrapper {
         /// Overwrites the client token to use for the API call. Should generally be used for
         /// making calls with Bearer tokens.
         ///
-        /// Note that rate limits are only tracked for the bot's own user. The context will not
-        /// track remaining rate limits for other tokens, although it will still wait for rate
-        /// limits to end before retrying requests.
+        /// The context will not track remaining rate limits for other tokens other than the
+        /// bot's own, although it will still wait for rate limits to end before retrying requests.
         pub fn client_token(mut $ident_self, token: DiscordToken) -> Self {
             {
                 let ptr = $($routes_field)*;
@@ -146,7 +190,7 @@ macro_rules! routes {
             $(#[$meta])*
             pub async fn $name(self, $($param: $param_ty,)*) -> Result<($($ty)?)> {
                 #[allow(unused_mut, unused_assignments)]
-                let mut rate_id: Snowflake = Snowflake(0);
+                let mut rate_id: Snowflake = SENTINEL;
                 $(rate_id = $rate_id.into();)?
                 $(let $let_name $(: $let_ty)? = $let_expr;)*
                 $(let __route = route!($($route)*);)?
@@ -254,8 +298,8 @@ routes! {
         request: get("/channels/{}/messages/{}/reactions/{}", ch.0, msg.0, emoji).query(&params),
     }
     /// Deletes all reactions from a message.
-    route delete_all_reactions(ch: ChannelId, msg: MessageId, emoji: &EmojiRef) on ch {
-        request: delete("/channels/{}/messages/{}/reactions/{}", ch.0, msg.0, emoji),
+    route delete_all_reactions(ch: ChannelId, msg: MessageId) on ch {
+        request: delete("/channels/{}/messages/{}/reactions", ch.0, msg.0),
     }
     /// Edits a message.
     route edit_message(ch: ChannelId, msg: MessageId, params: EditMessageParams<'_>) on ch -> Message {

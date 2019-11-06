@@ -84,11 +84,14 @@ pub struct ModifyChannelParams<'a> {
     pub topic: Option<Cow<'a, str>>,
     /// Whether this channel should be considered NSFW.
     pub nsfw: Option<bool>,
-    /// How many seconds a user has to wait before sending another message. Ranges from 0-21600.
-    /// A value of zero represents no rate limit.
+    /// How many seconds a user has to wait before sending another message. A value of zero
+    /// represents no rate limit.
+    ///
+    /// Currently ranges from 0-21600.
     pub rate_limit_per_user: Option<u32>,
-    /// The bitrate of this (voice) channel. Ranges from 8000 to 96000, and up to 128000 for
-    /// VIP servers.
+    /// The bitrate of this (voice) channel.
+    ///
+    /// Currently ranges from 8000 to 96000, and up to 128000 for VIP servers.
     pub bitrate: Option<u32>,
     /// The user limit of this (voice) channel.
     pub user_limit: Option<u32>,
@@ -108,12 +111,24 @@ new_from_default!(ModifyChannelParams);
 #[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GetChannelMessagesParams<'a> {
+    /// Get messages around this message ID.
+    ///
+    /// Mutually exclusive with `before` and `after`.
     #[setters(into)]
     pub around: Option<MessageId>,
+    /// Get messages before this message ID.
+    ///
+    /// Mutually exclusive with `around` and `after`.
     #[setters(into)]
     pub before: Option<MessageId>,
+    /// Get messages after this message ID.
+    ///
+    /// Mutually exclusive with `around` and `before`.
     #[setters(into)]
     pub after: Option<MessageId>,
+    /// The number of messages to retrieve.
+    ///
+    /// Currently ranges from 1 to 100. Defaults to 50.
     pub limit: Option<u32>,
     #[serde(skip)]
     phantom: PhantomData<&'a ()>,
@@ -127,11 +142,16 @@ new_from_default!(GetChannelMessagesParams);
 #[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct CreateMessageParams<'a> {
+    /// The contents of the post.
     #[setters(into)]
     pub content: Option<Cow<'a, str>>,
+    /// An nonce used to detect whether a message was successfully sent.
     #[setters(into)]
     pub nonce: Option<MessageNonce>,
-    pub tts: Option<bool>,
+    /// Whether to enable text to speech.
+    #[serde(default, skip_serializing_if = "utils::if_false")]
+    pub tts: bool,
+    /// The embed to attach to the post.
     #[setters(into)]
     pub embed: Option<Embed<'a>>,
 }

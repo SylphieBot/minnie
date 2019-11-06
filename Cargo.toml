@@ -19,6 +19,7 @@ derivative = "1.0.2"
 derive_setters = "0.1.0"
 enumset = { version = "0.4.0", features = ["serde"] }
 failure = "0.1.5"
+fnv = "1.0.3"
 futures01 = { package = "futures", version = "0.1.21" }
 futures-preview = { version = "=0.3.0-alpha.19", features = ["compat", "io-compat", "async-await"] }
 flate2 = { version = "1.0.7", default-features = false, features = ["rust_backend"] }
@@ -36,11 +37,10 @@ strum = "0.16.0"
 strum_macros = "0.16.0"
 tokio = "0.1.18"
 tokio-rustls = "0.10"
-twox-hash = "1.5"
 url = "1.7.2"
 webpki = "0.21"
 webpki-roots = "0.18"
 websocket = { version = "0.23.0", default-features = false, features = ["async"] }
 
 [dev-dependencies]
-simple_logger = "1.0.1"
+env_logger = "0.7.1"

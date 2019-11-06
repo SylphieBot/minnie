@@ -358,9 +358,13 @@ impl From<Snowflake> for MessageNonce {
 }
 impl From<String> for MessageNonce {
 	fn from(s: String) -> Self {
-		MessageNonce::String(s)
+		match s.parse::<u64>() {
+			Ok(v) => MessageNonce::Snowflake(v.into()),
+			Err(_) => MessageNonce::String(s),
+		}
 	}
 }
+// TODO: PartialEq implementations
 
 /// Information related to a message in a channel.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]

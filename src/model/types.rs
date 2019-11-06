@@ -2,6 +2,7 @@
 
 use crate::errors::*;
 use crate::serde::*;
+use fnv::FnvHasher;
 use lazy_static::*;
 use reqwest::header::HeaderValue;
 use std::borrow::Cow;
@@ -10,7 +11,6 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use twox_hash::XxHash64;
 
 /// A permission that a user may have.
 #[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
@@ -291,7 +291,7 @@ impl Snowflake {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
         let id = std::thread::current().id();
-        let mut hasher = XxHash64::default();
+        let mut hasher = FnvHasher::default();
         PROCESS_ID.hash(&mut hasher);
         id.hash(&mut hasher);
         let thread_hash = hasher.finish();
@@ -342,6 +342,7 @@ impl From<Snowflake> for u64 {
         i.0
     }
 }
+// TODO: PartialEq implementations
 
 /// A session ID for resuming sessions.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
