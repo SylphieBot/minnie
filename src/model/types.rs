@@ -383,6 +383,12 @@ pub struct EmojiId(pub Snowflake);
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(transparent)]
 pub struct GuildId(pub Snowflake);
+impl GuildId {
+    /// Gets the @everyone role for this guild.
+    pub fn everyone_role(self) -> RoleId {
+        RoleId(self.0)
+    }
+}
 
 /// A message ID.
 #[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

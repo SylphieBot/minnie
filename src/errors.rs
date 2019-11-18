@@ -82,8 +82,8 @@ pub enum ErrorKind {
     #[fail(display = "Discord returned bad response: {}", _0)]
     DiscordBadResponse(&'static str),
     /// Discord returned an error status code.
-    #[fail(display = "Request failed with {} ({})", _0, _1)]
-    RequestFailed(HttpStatusCode, DiscordError),
+    #[fail(display = "{} failed with {} ({})", _0, _1, _2)]
+    RequestFailed(&'static str, HttpStatusCode, DiscordError),
 }
 
 struct ErrorData {
@@ -96,10 +96,7 @@ pub fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
     let mut current: Option<&dyn Fail> = Some(&*fail);
     while let Some(x) = current {
         if let Some(bt) = x.backtrace() {
-            let s = bt.to_string();
-            if !s.trim().is_empty() {
-                return Some(bt)
-            }
+            return Some(bt)
         }
         current = x.cause();
     }

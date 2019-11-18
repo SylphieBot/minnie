@@ -389,10 +389,11 @@ enum ResponseStatus {
     RateLimited(Option<RateLimitHeaders>, Duration),
     GloballyRateLimited(Duration),
 }
-async fn check_response(
+async fn check_response<'a>(
     request: RequestBuilder,
-    reason: &Option<String>,
-    client_token: &Option<DiscordToken>,
+    reason: &'a Option<String>,
+    client_token: &'a Option<DiscordToken>,
+    call_name: &'static str,
 ) -> Result<ResponseStatus> {
     let mut request = request.header("X-RateLimit-Precision", "millisecond");
     if let Some(reason) = &reason {
@@ -420,7 +421,7 @@ async fn check_response(
             Ok(v) => v,
             Err(_) => DiscordError { code: DiscordErrorCode::NoStatusSent, message: None },
         };
-        Err(Error::new_with_backtrace(ErrorKind::RequestFailed(status, discord_error)))
+        Err(Error::new_with_backtrace(ErrorKind::RequestFailed(call_name, status, discord_error)))
     }
 }
 
@@ -487,15 +488,16 @@ impl RateLimitRoute {
         }
     }
 
-    pub async fn perform_rate_limited(
-        &self,
-        global_limit: &GlobalLimit,
-        store: &Mutex<RateLimitStore>,
+    pub async fn perform_rate_limited<'a>(
+        &'a self,
+        global_limit: &'a GlobalLimit,
+        store: &'a Mutex<RateLimitStore>,
         use_rate_limits: bool,
-        make_request: &(dyn Fn() -> Result<RequestBuilder> + Send + Sync),
+        make_request: &'a (dyn Fn() -> Result<RequestBuilder> + Send + Sync),
         reason: Option<String>,
         client_token: Option<DiscordToken>,
         id: Snowflake,
+        call_name: &'static str,
     ) -> Result<Response> {
         loop {
             let mut stored_bucket = None;
@@ -503,7 +505,7 @@ impl RateLimitRoute {
                 stored_bucket = self.check_wait(id, global_limit).await;
             }
             let panic_result: StdResult<Result<_>, _> = AssertUnwindSafe(async {
-                match check_response(make_request()?, &reason, &client_token).await? {
+                match check_response(make_request()?, &reason, &client_token, call_name).await? {
                     ResponseStatus::Success(rate_limit, response) => {
                         if use_rate_limits {
                             self.update_limits(id, rate_limit, store);

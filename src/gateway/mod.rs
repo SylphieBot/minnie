@@ -199,7 +199,10 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
                 cause = c.cause();
             }
             if let Some(bt) = find_backtrace(fail) {
-                write!(buf, "\nBacktrace:\n{}", bt).unwrap();
+                let str = bt.to_string();
+                if !str.trim().is_empty() {
+                    write!(buf, "\nBacktrace:\n{}", bt).unwrap();
+                }
             }
         }
         error!("{}", buf);

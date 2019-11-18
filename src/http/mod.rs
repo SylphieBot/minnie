@@ -212,6 +212,7 @@ macro_rules! routes {
                     reason,
                     client_token,
                     rate_id,
+                    stringify!($name),
                 ).await?;
                 Ok(($(_response.json::<$ty>().compat().await.map_err(|x| {
                     let kind = if x.is_serialization() {
@@ -226,7 +227,6 @@ macro_rules! routes {
     }
 }
 
-// TODO: Should I treat the `Modify * Position` endpoints as if they won't gain new fields?
 routes! {
     // Gateway routes
     //////////////////
@@ -410,11 +410,7 @@ routes! {
         request: post("/guilds/{}/channels").json(&params),
     }
     /// Changes the position of a channel in a guild.
-    route modify_guild_channel_position(guild: GuildId, ch: ChannelId, position: u32) on guild {
-        let params = ModifyGuildChannelPositionJsonParams {
-            id: ch,
-            position,
-        };
+    route modify_guild_channel_position(guild: GuildId, params: Vec<ModifyGuildChannelPositionParams>) on guild {
         request: patch("/guilds/{}/channels").json(&params),
     }
     /// Gets information about a guild member.
@@ -475,11 +471,7 @@ routes! {
         request: post("/guilds/{}/roles", guild.0).json(&params),
     }
     /// Changes the hierarchy of roles in a guild.
-    route modify_guild_role_position(guild: GuildId, role: RoleId, position: u32) on guild {
-        let params = ModifyGuildRolePositionsJsonParams {
-            id: role,
-            position,
-        };
+    route modify_guild_role_position(guild: GuildId, params: Vec<ModifyGuildRolePositionParams>) on guild {
         request: patch("/guilds/{}/roles").json(&params),
     }
     /// Changes a role in a guild.
@@ -519,7 +511,10 @@ routes! {
     route modify_guild_embed(guild: GuildId, params: ModifyGuildEmbedParams<'_>) on guild -> GuildEmbedSettings {
         request: patch("/guilds/{}/embed", guild.0).json(&params),
     }
-    // TODO: Get Guild Vanity URL
+    /// Gets a guild's vanity invite URL, if one exists.
+    route get_guild_vanity_url(guild: GuildId) on guild -> GetGuildVanityURL {
+        request: get("/guilds/{}/vanity-url", guild.0),
+    }
     // TODO: Get Guild Widget Image
 
     // Invite routes
@@ -585,20 +580,8 @@ struct EditChannelPermissionsJsonParams {
 }
 
 #[derive(Serialize)]
-struct ModifyGuildChannelPositionJsonParams {
-    id: ChannelId,
-    position: u32,
-}
-
-#[derive(Serialize)]
 struct ModifyCurrentUserNickJsonParams<'a> {
     nick: &'a str,
-}
-
-#[derive(Serialize)]
-struct ModifyGuildRolePositionsJsonParams {
-    id: RoleId,
-    position: u32,
 }
 
 #[derive(Serialize)]

@@ -16,11 +16,12 @@ use std::fmt;
 #[non_exhaustive]
 pub struct MentionChannel {
     pub id: ChannelId,
-    pub guild_id: ChannelId,
+    pub guild_id: GuildId,
     #[serde(rename = "type")]
     pub channel_type: ChannelType,
     pub name: String,
 }
+into_id!(MentionChannel, ChannelId, id);
 
 /// An attachment to a message.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
@@ -34,6 +35,7 @@ pub struct Attachment {
     pub height: Option<u64>,
     pub width: Option<u64>,
 }
+into_id!(Attachment, AttachmentId, id);
 
 /// An embed attached to a message.
 #[serde_with::skip_serializing_none]
@@ -293,6 +295,7 @@ pub struct MessageApplication {
 	pub icon: Option<String>,
 	pub name: String,
 }
+into_id!(MessageApplication, ApplicationId, id);
 
 /// The origin of a crossposted message.
 #[serde_with::skip_serializing_none]
@@ -406,3 +409,4 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "EnumSet::is_empty")]
     pub flags: EnumSet<MessageFlag>,
 }
+into_id!(Message, MessageId, id);

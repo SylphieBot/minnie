@@ -63,6 +63,7 @@ pub struct User {
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub bot: bool,
 }
+into_id!(User, UserId, id);
 
 /// A struct representing a user with additional member information. Used as part of
 /// messages returned by certain events.
@@ -85,6 +86,7 @@ pub struct PartialUser {
     pub avatar: Option<String>,
     pub bot: Option<bool>,
 }
+into_id!(PartialUser, UserId, id);
 
 /// A struct representing a full user. Returned only by the `/users/@me` endpoint.
 #[serde_with::skip_serializing_none]
@@ -196,7 +198,7 @@ impl Default for ActivityType {
 
 /// The time periods for which an activity has been going on.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Default, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct ActivityTimestamps {
     #[serde(default, with = "utils::system_time_millis_opt")]

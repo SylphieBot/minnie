@@ -14,6 +14,7 @@ pub struct UnavailableGuild {
     pub id: GuildId,
     pub unavailable: bool,
 }
+into_id!(UnavailableGuild, GuildId, id);
 
 /// The verification requirements of a guild.
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -134,6 +135,7 @@ pub struct Role {
     pub managed: bool,
     pub mentionable: bool,
 }
+into_id!(Role, RoleId, id);
 
 /// Information related to an emoji in a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
@@ -212,6 +214,13 @@ pub struct PartialGuild {
     pub description: Option<String>,
     pub banner: Option<String>,
 }
+impl PartialGuild {
+    /// Gets the @everyone role for this guild.
+    pub fn everyone_role(self) -> RoleId {
+        self.id.everyone_role()
+    }
+}
+into_id!(PartialGuild, GuildId, id);
 
 /// Information related to a role in a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
@@ -275,6 +284,13 @@ pub struct Guild {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_locale: Option<String>,
 }
+impl Guild {
+    /// Gets the @everyone role for this guild.
+    pub fn everyone_role(self) -> RoleId {
+        self.id.everyone_role()
+    }
+}
+into_id!(Guild, GuildId, id);
 
 /// A banned user on a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]

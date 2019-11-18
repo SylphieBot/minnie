@@ -12,7 +12,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-/// The structure returned by `Get Gateway` endpoint.
+/// The error code returned when an API call fails.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
@@ -49,7 +49,7 @@ pub struct GetGateway {
 }
 
 /// The current limits on starting sessions.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct SessionStartLimit {
     pub total: u32,
@@ -415,6 +415,21 @@ impl <'a> CreateGuildChannelParams<'a> {
     }
 }
 
+/// An elmeent in the array passed to the `Modify Guild Channel Position` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+pub struct ModifyGuildChannelPositionParams {
+    pub id: ChannelId,
+    pub position: u32,
+}
+impl ModifyGuildChannelPositionParams {
+    pub fn new(id: impl Into<ChannelId>, position: u32) -> Self {
+        ModifyGuildChannelPositionParams { id: id.into(), position }
+    }
+}
+
 /// The parameters of the `List Guild Members` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
@@ -504,6 +519,21 @@ pub struct GuildRoleParams<'a> {
 }
 new_from_default!(GuildRoleParams);
 
+/// An elmeent in the array passed to the `Modify Guild Role Position` endpoint.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+pub struct ModifyGuildRolePositionParams {
+    pub id: RoleId,
+    pub position: u32,
+}
+impl ModifyGuildRolePositionParams {
+    pub fn new(id: impl Into<RoleId>, position: u32) -> Self {
+        ModifyGuildRolePositionParams { id: id.into(), position }
+    }
+}
+
 /// The parameters of the `Get Guild Prune Count` endpoint.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
@@ -553,8 +583,15 @@ pub struct ModifyGuildEmbedParams<'a> {
 }
 new_from_default!(ModifyGuildEmbedParams);
 
+/// The return value of the `Get Guild Vanity URL` endpoint.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct GetGuildVanityURL {
+    pub code: Option<String>,
+}
+
 /// Information relating to users pruned from a guild.
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct GuildPruneInfo {
     pub pruned: Option<u32>,

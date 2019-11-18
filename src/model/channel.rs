@@ -90,7 +90,7 @@ impl From<RoleId> for PermissionOverwriteId {
 }
 
 /// A permission overwrite in a channel.
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[derive(Setters)]
 #[non_exhaustive]
 pub struct PermissionOverwrite {
@@ -136,7 +136,7 @@ impl From<RawPermissionOverwrite> for PermissionOverwrite {
 
 impl Serialize for PermissionOverwrite {
     fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
-        RawPermissionOverwrite::serialize(&(*self).into(), serializer)
+        RawPermissionOverwrite::serialize(&self.clone().into(), serializer)
     }
 }
 impl <'de> Deserialize<'de> for PermissionOverwrite {
@@ -155,6 +155,7 @@ pub struct PartialChannel {
     pub channel_type: ChannelType,
     pub name: Option<String>,
 }
+into_id!(PartialChannel, ChannelId, id);
 
 /// Information related to a channel.
 #[serde_with::skip_serializing_none]
@@ -198,6 +199,7 @@ pub struct Channel {
     pub parent_id: Option<CategoryId>,
     pub last_pin_timestamp: Option<DateTime<Utc>>,
 }
+into_id!(Channel, ChannelId, id);
 
 /// The type of user invited to a Discord channel.
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -215,33 +217,45 @@ pub enum InviteTargetUserType {
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct Invite {
-    code: String,
-    guild: Option<PartialGuild>,
-    channel: PartialChannel,
-    target_user: Option<User>,
-    target_user_type: Option<InviteTargetUserType>,
-    approximate_presence_count: Option<u32>,
-    approximate_member_count: Option<u32>,
+    pub code: String,
+    pub guild: Option<PartialGuild>,
+    pub channel: PartialChannel,
+    pub target_user: Option<User>,
+    pub target_user_type: Option<InviteTargetUserType>,
+    pub approximate_presence_count: Option<u32>,
+    pub approximate_member_count: Option<u32>,
+}
+impl Invite {
+    /// Returns a link to this invite.
+    pub fn link(self) -> String {
+        format!("https://discord.gg/{}", self.code)
+    }
 }
 
 /// Metadata for an invite.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct InviteMetadata {
-    inviter: User,
-    uses: u32,
-    max_uses: u32,
+    pub inviter: User,
+    pub uses: u32,
+    pub max_uses: u32,
     #[serde(with = "utils::duration_secs")]
-    max_age: Duration,
-    temporary: bool,
-    created_at: DateTime<Utc>,
+    pub max_age: Duration,
+    pub temporary: bool,
+    pub created_at: DateTime<Utc>,
 }
 
 /// An invite to a channel or guild with metadata.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 pub struct InviteWithMetadata {
     #[serde(flatten)]
-    invite: Invite,
+    pub invite: Invite,
     #[serde(flatten)]
-    metadata: InviteMetadata,
+    pub metadata: InviteMetadata,
+}
+impl InviteWithMetadata {
+    /// Returns a link to this invite.
+    pub fn link(self) -> String {
+        self.invite.link()
+    }
 }

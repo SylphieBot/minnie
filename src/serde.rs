@@ -2,16 +2,16 @@
 
 pub use enumset::*;
 pub use serde::de::{
-    Deserializer, Deserialize, DeserializeSeed, DeserializeOwned, IntoDeserializer,
+    Deserializer, DeserializeSeed, DeserializeOwned, IntoDeserializer,
     IgnoredAny, Visitor, MapAccess, EnumAccess, VariantAccess,
     Error as DeError,
 };
 pub use serde::ser::{
-    Serializer, Serialize, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
+    Serializer, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant,
     SerializeTuple, SerializeTupleStruct, SerializeTupleVariant, Impossible,
     Error as SerError,
 };
-pub use serde_derive::*;
+pub use serde::{Serialize, Deserialize};
 pub use serde_repr::*;
 pub use serde_json::{self, Value as JsonValue};
 pub use strum_macros::*;

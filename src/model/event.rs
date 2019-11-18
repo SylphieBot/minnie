@@ -225,7 +225,7 @@ pub struct MessageReactionRemoveEvent {
     pub emoji: Emoji,
 }
 
-/// A `Message Reaction All` event.
+/// A `Message Reaction Remove All` event.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct MessageReactionRemoveAllEvent {

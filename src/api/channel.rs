@@ -3,6 +3,8 @@ use crate::http::*;
 use crate::model::channel::*;
 use crate::model::message::*;
 use crate::model::types::*;
+use crate::model::user::*;
+use enumset::*;
 use futures::future::try_join_all;
 use std::borrow::Cow;
 
@@ -17,6 +19,11 @@ pub struct ChannelOps<'a> {
     pub(crate) raw: Routes<'a>,
 }
 impl <'a> ChannelOps<'a> {
+    /// Performs operations relating to a message.
+    pub async fn message(self, id: impl Into<MessageId>) -> MessageOps<'a> {
+        MessageOps { channel_id: self.id, message_id: id.into(), raw: self.raw }
+    }
+
     /// Retrieves information relating to the channel.
     pub async fn get(self) -> Result<Channel> {
         self.raw.get_channel(self.id).await
@@ -67,19 +74,21 @@ impl <'a> ChannelOps<'a> {
         GetMessageHistoryFut::new(self)
     }
 
-    /// Performs operations relating to a message.
-    pub async fn message(self, id: impl Into<MessageId>) -> MessageOps<'a> {
-        MessageOps { channel_id: self.id, message_id: id.into(), raw: self.raw }
-    }
-
     /// Posts a message to this channel.
     ///
-    /// TODO: Further documentation
+    /// Use the [`content`](`PostFut::content`) and [`embed`](`PostFut::embed`) methods of the
+    /// returned future to set the post contents. At least one of `content`, `embed`, or `file`
+    /// must be called or an error will be returned.
+    ///
+    /// For more information on other options for this API call, see the methods of [`PostFut`].
     pub fn post(self) -> PostFut<'a> {
         PostFut::new(self)
     }
 
     /// Deletes a list of messages.
+    ///
+    /// This will make an API call for each 100 messages in the list. The API calls will be
+    /// dispatched simultaneously.
     pub async fn delete_messages(self, messages: impl Into<Cow<'a, [MessageId]>>) -> Result<()> {
         let messages = messages.into();
         if messages.len() == 1 {
@@ -96,15 +105,44 @@ impl <'a> ChannelOps<'a> {
         Ok(())
     }
 
-    // TODO: Edit Channel Permissions
+    /// Completely overwrites the permission overwrite for a given user or role.
+    ///
+    /// If the given `allow` and `deny` sets are both empty, the overwrite is instead deleted.
+    pub async fn set_permissions(
+        self, overwrite: impl Into<PermissionOverwriteId>,
+        allow: impl Into<EnumSet<Permission>>, deny: impl Into<EnumSet<Permission>>,
+    ) -> Result<()> {
+        let allow = allow.into();
+        let deny = deny.into();
+        if allow.is_empty() && deny.is_empty() {
+            self.raw.delete_channel_permission(self.id, overwrite.into()).await
+        } else {
+            self.raw.edit_channel_permissions(
+                self.id, overwrite.into(),
+                EditChannelPermissionsParams::new(allow.into(), deny.into())
+            ).await
+        }
+    }
 
     /// Retrieves a list of invites to this channel.
     pub async fn get_invites(self) -> Result<Vec<InviteWithMetadata>> {
         self.raw.get_channel_invites(self.id).await
     }
 
-    // TODO: Create Channel Invite
-    // TODO: Delete Channel Permission
+    /// Creates an invite to this channel.
+    ///
+    /// By default, this creates an invite valid for 24 hours, and reuses old invite codes. For
+    /// more information on other options for this API call, see the methods of [`InviteFut`].
+    pub fn invite(self) -> InviteFut<'a> {
+        InviteFut::new(self)
+    }
+
+    /// Clears all permission overwrites for a given user or role.
+    pub async fn clear_permissions(
+        self, overwrite: impl Into<PermissionOverwriteId>,
+    ) -> Result<()> {
+        self.raw.delete_channel_permission(self.id, overwrite.into()).await
+    }
 
     /// Triggers the typing indicator.
     pub async fn typing(self) -> Result<()> {
@@ -151,14 +189,26 @@ impl <'a> MessageOps<'a> {
         self.raw.delete_user_reaction(self.channel_id, self.message_id, emoji, user).await
     }
 
-    // TODO: Get Reactions
+    /// Retrieves a list of users who reacted with a particular emoji to this message.
+    ///
+    /// By default, this returns the first 25 users in the list. For more information on other
+    /// options for this API call, see the methods of [`EmojiReactionsFut`].
+    pub async fn emoji_reactions(self, emoji: &'a EmojiRef) -> EmojiReactionsFut<'a> {
+        EmojiReactionsFut::new(self, emoji)
+    }
 
     /// Deletes all reactions from a message.
     pub async fn clear_reactions(self) -> Result<()> {
         self.raw.delete_all_reactions(self.channel_id, self.message_id).await
     }
 
-    // TODO: Edit Message
+    /// Edits this message.
+    /// 
+    /// This has similar parameters to posting messages, but only [`content`](`EditFut::content`)
+    /// and [`embed`](`EditFut::embed`) are supported.
+    pub fn edit(self) -> EditFut<'a> {
+        EditFut::new(self)
+    }
 
     /// Deletes this message.
     pub async fn delete(self) -> Result<()> {
@@ -275,21 +325,21 @@ fut_builder! {
 
     /// Gets messages around the message ID.
     ///
-    /// Mutually exclusive with `before` and `after.`
+    /// Mutually exclusive with `before` and `after`.
     pub fn around(&mut self, id: impl Into<MessageId>) {
         self.params.around = Some(id.into());
     }
 
     /// Gets messages before the message ID.
     ///
-    /// Mutually exclusive with `around` and `after.`
+    /// Mutually exclusive with `around` and `after`.
     pub fn before(&mut self, id: impl Into<MessageId>) {
         self.params.before = Some(id.into());
     }
 
     /// Gets messages after the message ID.
     ///
-    /// Mutually exclusive with `around` and `before.`
+    /// Mutually exclusive with `around` and `before`.
     pub fn after(&mut self, id: impl Into<MessageId>) {
         self.params.after = Some(id.into());
     }
@@ -303,7 +353,7 @@ fut_builder! {
 }
 
 fut_builder! {
-    ('a, post_fut, ChannelOps, self)
+    ('a, post_fut_mod, ChannelOps, self)
 
     /// A future for posting a new message.
     ///
@@ -327,7 +377,8 @@ fut_builder! {
 
     /// Sets the nonce for this post.
     ///
-    /// TODO: Elaborate
+    /// The nonce will be present in the event the messages triggers in the gateway, and can be
+    /// used to confirm that the message has been successfully sent.
     pub fn nonce(&mut self, nonce: impl Into<MessageNonce>) {
         self.params.nonce = Some(nonce.into());
     }
@@ -345,5 +396,120 @@ fut_builder! {
     /// Attaches a file to the message.
     pub fn file(&mut self, file: CreateMessageFile<'a>) {
         self.files.push(file);
+    }
+}
+
+fut_builder! {
+    ('a, invite_fut_mod, ChannelOps, self)
+
+    /// A future for creating a new invite to a channel.
+    ///
+    /// Instances can be obtained via [`ChannelOps::invite`].
+    struct InviteFut {
+        params: CreateChannelInviteParams<'a>,
+        explicit_unique: Option<bool>,
+    }
+    into_async!(|ops, mut data| -> Result<Invite> {
+        if let Some(explicit_unique) = data.explicit_unique {
+            data.params.unique = Some(explicit_unique);
+        } else {
+            data.params.unique = Some(match data.params.max_uses {
+                Some(x) => x != 0,
+                None => false,
+            });
+        }
+        ops.raw.create_channel_invite(ops.id, data.params).await
+    });
+
+    /// Sets the number of seconds this invite is valid for. If set to zero, the invite will never
+    /// expire.
+    pub fn expires_in(&mut self, age: u32) {
+        self.params.max_age = Some(age);
+    }
+
+    /// Sets the invite to never expire.
+    pub fn no_expire(&mut self) {
+        self.params.max_age = Some(0);
+    }
+
+    /// The maximum number of times. If set to zero, the invite can be used any number of times.
+    pub fn max_uses(&mut self, uses: u32) {
+        self.params.max_uses = Some(uses);
+    }
+
+    /// Sets whether the user should be invited temporary.
+    ///
+    /// Users invited with a temporary invite are kicked when they disconnect unless they have
+    /// been assigned any roles.
+    pub fn temporary(&mut self, temporary: bool) {
+        self.params.temporary = Some(temporary);
+    }
+
+    /// Sets whether to reuse older invite codes.
+    ///
+    /// This is true by default, and is disabled by default if `max_uses` is set.
+    pub fn reuse(&mut self, reuse: bool) {
+        self.explicit_unique = Some(!reuse);
+    }
+}
+
+fut_builder! {
+    ('a, emoji_reactions_fut_mod, MessageOps, self)
+
+    /// A future for creating retrieving a list of users who reacted a particular emoji
+    /// to a message.
+    ///
+    /// Instances can be obtained via [`MessageOps::emoji_reactions`].
+    params!(emoji: &'a EmojiRef);
+    struct EmojiReactionsFut {
+        params: GetReactionsParams<'a>,
+    }
+    into_async!(|ops, data| -> Result<Vec<User>> {
+        ops.raw.get_reactions(ops.channel_id, ops.message_id, data.emoji, data.params).await
+    });
+
+    /// Gets reactions by users before the user ID.
+    ///
+    /// Mutually exclusive with `after`.
+    pub fn before(&mut self, id: impl Into<UserId>) {
+        self.params.before = Some(id.into());
+    }
+
+    /// Gets reactions by users after the user ID.
+    ///
+    /// Mutually exclusive with `before`.
+    pub fn after(&mut self, id: impl Into<UserId>) {
+        self.params.after = Some(id.into());
+    }
+
+    /// Sets the number of users to return.
+    ///
+    /// Currently limited to 1-100 users. Defaults to 25 users.
+    pub fn limit(&mut self, limit: u32) {
+        self.params.limit = Some(limit);
+    }
+}
+
+fut_builder! {
+    ('a, edit_fut_mod, MessageOps, self)
+
+    /// A future for editing a message.
+    ///
+    /// Instances can be obtained via [`MessageOps::edit`].
+    struct EditFut {
+        params: EditMessageParams<'a>,
+    }
+    into_async!(|ops, data| -> Result<Message> {
+        ops.raw.edit_message(ops.channel_id, ops.message_id, data.params).await
+    });
+
+    /// Sets the content of the post.
+    pub fn content(&mut self, content: impl Into<Cow<'a, str>>) {
+        self.params.content = Some(content.into());
+    }
+
+    /// Sets the embed of the post.
+    pub fn embed(&mut self, embed: impl Into<Embed<'a>>) {
+        self.params.embed = Some(embed.into());
     }
 }

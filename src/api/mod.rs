@@ -5,18 +5,17 @@
 
 use crate::context::*;
 use crate::model::channel::{Channel, PartialChannel};
+use crate::model::guild::{Guild, PartialGuild};
 use crate::model::message::Message;
 use crate::model::types::*;
 
-// TODO: Additional validation if practical
 // TODO: Create iterators based on the various get_* functions.
-// TODO: Consider adding helper methods on Message, Channel, etc.
-// TODO: Consider splitting MessageOps from ChannelOps?
 
 macro_rules! fut_builder {
     (
         ($lt:lifetime, $mod_name:ident, $parent_name:ident, $self_ident:ident)
         $(#[$struct_meta:meta])*
+        $(params!($($struct_param_name:ident: $struct_param_ty:ty),* $(,)?);)?
         struct $ops_name:ident {
             $($field_name:ident: $field_ty:ty),* $(,)?
         }
@@ -57,6 +56,7 @@ macro_rules! fut_builder {
             type FutType<$lt> = Box<dyn Future<Output = $async_ty> + Send + $lt>;
 
             struct Data<$lt> {
+                $($($struct_param_name: $struct_param_ty,)*)?
                 $($field_name: $field_ty,)*
             }
             enum State<$lt> {
@@ -81,8 +81,11 @@ macro_rules! fut_builder {
                 )*
             }
             impl <$lt> $ops_name<$lt> {
-                pub(crate) fn new(parent: $parent_name<$lt>) -> Self {
+                pub(crate) fn new(
+                    parent: $parent_name<$lt>, $($($struct_param_name: $struct_param_ty,)*)?
+                ) -> Self {
                     $ops_name(State::Builder(parent, Data {
+                        $($($struct_param_name,)*)?
                         $($field_name: Default::default(),)?
                     }))
                 }
@@ -149,8 +152,12 @@ macro_rules! fut_builder {
 }
 
 mod channel;
+mod guild;
+mod user;
 
 pub use channel::*;
+pub use guild::*;
+pub use user::*;
 
 impl DiscordContext {
     /// Performs operations relating to a Discord channel.
@@ -164,6 +171,16 @@ impl DiscordContext {
     ) -> MessageOps<'_> {
         MessageOps { channel_id: channel.into(), message_id: message.into(), raw: self.raw() }
     }
+
+    /// Performs operations relating to a guild.
+    pub fn guild(&self, id: impl Into<GuildId>) -> GuildOps<'_> {
+        GuildOps { id: id.into(), raw: self.raw() }
+    }
+
+    /// Performs operations relating to a member.
+    pub fn member(&self, guild: impl Into<GuildId>, member: impl Into<UserId>) -> MemberOps<'_> {
+        MemberOps { guild_id: guild.into(), user_id: member.into(), raw: self.raw() }
+    }
 }
 impl Channel {
     /// Performs operations on this channel.
@@ -171,10 +188,22 @@ impl Channel {
         ChannelOps { id: self.id, raw: ctx.raw() }
     }
 }
+impl Guild {
+    /// Performs operations on this guild.
+    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> GuildOps<'a> {
+        GuildOps { id: self.id, raw: ctx.raw() }
+    }
+}
 impl PartialChannel {
     /// Performs operations on this channel.
     pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> ChannelOps<'a> {
         ChannelOps { id: self.id, raw: ctx.raw() }
+    }
+}
+impl PartialGuild {
+    /// Performs operations on this guild.
+    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> GuildOps<'a> {
+        GuildOps { id: self.id, raw: ctx.raw() }
     }
 }
 impl Message {
