@@ -297,6 +297,13 @@ fn push_global_rate_limit(global_limit: &GlobalLimit, target: Instant) {
 async fn check_wait(
     id: Snowflake, bucket: Option<Arc<Mutex<Bucket>>>, global_limit: &GlobalLimit,
 ) {
+    let mut waiting = false;
+    let mut report_waiting = || {
+        if !waiting {
+            waiting = true;
+            trace!("Waiting for rate limit...");
+        }
+    };
     loop {
         // Check global rate limit
         let global_result = {
@@ -309,6 +316,7 @@ async fn check_wait(
             *lock
         };
         if let Some(time) = global_result {
+            report_waiting();
             wait_until(time).await;
             continue;
         }
@@ -317,6 +325,7 @@ async fn check_wait(
         if let Some(bucket) = &bucket {
             let local_result = bucket.lock().check_limit(id);
             if let Some(time) = local_result {
+                report_waiting();
                 wait_until(time).await;
             } else {
                 return;
@@ -409,7 +418,7 @@ async fn check_response<'a>(
     } else if response.status() == StatusCode::TOO_MANY_REQUESTS {
         let rate_info = response.json::<RateLimited>().compat().await
             .context(ErrorKind::DiscordBadResponse("Could not parse rate limit information."))?;
-        trace!("Encountered rate limit: {:?}", rate_info);
+        debug!("Encountered rate limit: {:?}", rate_info);
         if rate_info.global {
             Ok(ResponseStatus::GloballyRateLimited(rate_info.retry_after))
         } else {
@@ -505,6 +514,7 @@ impl RateLimitRoute {
                 stored_bucket = self.check_wait(id, global_limit).await;
             }
             let panic_result: StdResult<Result<_>, _> = AssertUnwindSafe(async {
+                trace!("Sending request...");
                 match check_response(make_request()?, &reason, &client_token, call_name).await? {
                     ResponseStatus::Success(rate_limit, response) => {
                         if use_rate_limits {

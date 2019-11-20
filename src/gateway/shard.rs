@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::timer::Delay;
+use tracing_futures::*;
 use url::*;
 
 #[derive(Clone)]
@@ -419,7 +420,8 @@ pub fn start_shard(
     dispatch: Arc<impl GatewayHandler>,
 ) {
     if !shard.started.compare_and_swap(false, true, Ordering::Relaxed) {
-        executor.spawn(async move {
+        let id = shard.id;
+        let fut = async move {
             let gateway_ctx = GatewayContext {
                 ctx,
                 shard_id: shard.id,
@@ -431,7 +433,11 @@ pub fn start_shard(
             }).await {
                 dispatch.report_error(&gateway_ctx, GatewayError::Panicked(e));
             }
-        }).expect("Could not spawn future into given executor.");
+        };
+        executor.spawn(
+            // TODO: *should* this trace its parents?
+            fut.instrument(error_span!("shard", %id)),
+        ).expect("Could not spawn future into given executor.");
     } else {
         panic!("Shard #{} already started.", shard.id);
     }

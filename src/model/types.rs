@@ -8,6 +8,7 @@ use reqwest::header::HeaderValue;
 use std::borrow::Cow;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -162,7 +163,7 @@ pub enum EmojiRef {
     /// A built-in emoji.
     Builtin(Cow<'static, str>),
     /// A custom emoji.
-    Custom(Cow<'static, str>, EmojiId),
+    Custom(Option<Cow<'static, str>>, EmojiId),
 }
 impl EmojiRef {
     /// Creates a reference to a built-in emoji.
@@ -171,8 +172,13 @@ impl EmojiRef {
     }
 
     /// Creates a reference to a custom emoji.
-    pub fn custom(name: impl Into<Cow<'static, str>>, id: EmojiId) -> EmojiRef {
-        EmojiRef::Custom(name.into(), id)
+    pub fn custom(id: impl Into<EmojiId>) -> EmojiRef {
+        EmojiRef::Custom(None, id.into())
+    }
+}
+impl From<EmojiId> for EmojiRef {
+    fn from(id: EmojiId) -> Self {
+        EmojiRef::custom(id)
     }
 }
 impl fmt::Display for EmojiRef {
@@ -180,7 +186,7 @@ impl fmt::Display for EmojiRef {
         match self {
             EmojiRef::Builtin(s) => f.write_str(s),
             EmojiRef::Custom(n, i) => {
-                f.write_str(n)?;
+                f.write_str(n.as_ref().map(Deref::deref).unwrap_or("x"))?;
                 f.write_str(":")?;
                 fmt::Display::fmt(&i.0, f)
             }
@@ -193,16 +199,16 @@ impl Serialize for EmojiRef {
         #[derive(Serialize)]
         struct RawEmojiRef<'a> {
             id: Option<EmojiId>,
-            name: &'a str,
+            name: Option<&'a str>,
         }
         match self {
             EmojiRef::Builtin(s) => RawEmojiRef {
                 id: None,
-                name: s.as_ref(),
+                name: Some(s.as_ref()),
             },
             EmojiRef::Custom(name, id) => RawEmojiRef {
                 id: Some(*id),
-                name: name.as_ref(),
+                name: name.as_ref().map(Deref::deref),
             },
         }.serialize(serializer)
     }
@@ -212,12 +218,15 @@ impl <'de> Deserialize<'de> for EmojiRef {
         #[derive(Deserialize)]
         struct RawEmojiRef {
             id: Option<EmojiId>,
-            name: String,
+            name: Option<String>,
         }
         let d = RawEmojiRef::deserialize(deserializer)?;
         Ok(match d.id {
-            Some(id) => EmojiRef::Custom(d.name.into(), id),
-            None => EmojiRef::Builtin(d.name.into()),
+            Some(id) => EmojiRef::Custom(d.name.map(Into::into), id),
+            None => EmojiRef::Builtin(match d.name {
+                Some(x) => x.into(),
+                None => return Err(D::Error::missing_field("name")),
+            }),
         })
     }
 }
@@ -430,6 +439,11 @@ macro_rules! id_structs {
         impl From<$name> for u64 {
             fn from(id: $name) -> u64 {
                 id.0.into()
+            }
+        }
+        impl fmt::Display for $name {
+            fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(fmt, "#{}", self.0)
             }
         }
     )*};

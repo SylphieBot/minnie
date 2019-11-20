@@ -7,7 +7,9 @@ use crate::model::guild::*;
 use crate::model::user::*;
 use crate::serde::*;
 use derive_setters::*;
+use std::fmt;
 use std::time::Duration;
+use failure::_core::fmt::Formatter;
 
 /// The type of an channel.
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -86,6 +88,14 @@ impl From<UserId> for PermissionOverwriteId {
 impl From<RoleId> for PermissionOverwriteId {
     fn from(id: RoleId) -> Self {
         PermissionOverwriteId::Role(id)
+    }
+}
+impl fmt::Display for PermissionOverwriteId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            PermissionOverwriteId::Member(id) => write!(f, "user:{}", id),
+            PermissionOverwriteId::Role(id) => write!(f, "role:{}", id),
+        }
     }
 }
 

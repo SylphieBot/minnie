@@ -5,7 +5,7 @@
 // TODO: Look into the tracing crate.
 
 #[macro_use] extern crate derivative;
-#[macro_use] extern crate log;
+#[macro_use] extern crate tracing;
 
 #[macro_use] mod errors;
 #[macro_use] mod serde;
