@@ -512,4 +512,14 @@ fut_builder! {
     pub fn embed(&mut self, embed: impl Into<Embed<'a>>) {
         self.params.embed = Some(embed.into());
     }
+
+    /// Sets the whether embeds are suppressed on the post.
+    pub fn suppress_embeds(&mut self, suppress: bool) {
+        let flags = self.params.flags.get_or_insert(EnumSet::new());
+        if suppress {
+            flags.insert(MessageFlag::SuppressEmbeds);
+        } else {
+            flags.remove(MessageFlag::SuppressEmbeds);
+        }
+    }
 }

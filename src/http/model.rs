@@ -213,6 +213,8 @@ pub struct EditMessageParams<'a> {
     #[setters(into)]
     pub content: Option<Cow<'a, str>>,
     pub embed: Option<Embed<'a>>,
+    #[setters(into)]
+    pub flags: Option<EnumSet<MessageFlag>>,
 }
 new_from_default!(EditMessageParams);
 

@@ -210,6 +210,7 @@ pub struct MessageReactionAddEvent {
     pub channel_id: ChannelId,
     pub message_id: MessageId,
     pub guild_id: Option<GuildId>,
+    pub member: Option<Member>,
     pub emoji: Emoji,
 }
 

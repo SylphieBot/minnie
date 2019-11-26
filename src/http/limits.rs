@@ -157,6 +157,7 @@ impl RateLimit {
         &mut self, config: &HttpConfig,
         bucket_estimated: &mut Option<EstimatedLimits>, info: RateLimitHeaders,
     ) {
+        // TODO: Handle case where a reset is received out of order.
         let replace = match &mut self.data {
             RateLimitData::NoLimitAvailable => true,
             RateLimitData::ReceivedNoLimits => true,
