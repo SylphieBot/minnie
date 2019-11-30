@@ -62,6 +62,7 @@ pub struct User {
     pub avatar: Option<String>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub bot: bool,
+    pub system: Option<bool>,
 }
 into_id!(User, UserId, id);
 
@@ -85,6 +86,7 @@ pub struct PartialUser {
     pub discriminator: Option<Discriminator>,
     pub avatar: Option<String>,
     pub bot: Option<bool>,
+    pub system: Option<bool>,
 }
 into_id!(PartialUser, UserId, id);
 
@@ -118,6 +120,7 @@ pub enum UserFlags {
     HouseBalance = 8,
     EarlySupporter = 9,
     TeamUser = 10,
+    System = 12,
 }
 
 /// The kind of Nitro subscription a user has.

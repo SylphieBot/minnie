@@ -314,6 +314,8 @@ pub enum MessageFlag {
     Crossposted = 0,
     IsCrosspost = 1,
     SuppressEmbeds = 2,
+	SourceMessageDeleted = 3,
+	Urgent = 4,
 }
 
 /// A message nonce.

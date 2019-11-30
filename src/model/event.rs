@@ -275,6 +275,7 @@ pub struct TypingStartEvent {
     pub user_id: UserId,
     #[serde(with = "utils::system_time_secs")]
     pub timestamp: SystemTime,
+    pub member: Option<Member>,
 }
 
 /// A `User Update` event.
