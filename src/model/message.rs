@@ -318,17 +318,43 @@ pub enum MessageFlag {
 	Urgent = 4,
 }
 
-/// A message nonce.
+/// The internal representation of a message nonce.
+///
+/// Note that [`MessageNonceData::String`] should never be constructed for any string that would
+/// parse as a snowflake, or else code will break.
 #[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
-pub enum MessageNonce {
+enum MessageNonceData {
 	Snowflake(Snowflake),
 	String(String),
 }
+
+/// A wrapper for a message nonce.
+///
+/// This can contain an arbitrary string or snowflake.
+#[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
+pub struct MessageNonce(MessageNonceData);
+impl MessageNonce {
+	/// Returns the message nonce as a snowflake, if it can be converted into one.
+	pub fn as_snowflake(&self) -> Option<Snowflake> {
+		match &self.0 {
+			MessageNonceData::Snowflake(s) => Some(*s),
+			_ => None,
+		}
+	}
+
+	/// Returns the message nonce as a string.
+	pub fn as_str(&self) -> Cow<str> {
+		match &self.0 {
+			MessageNonceData::Snowflake(s) => s.0.to_string().into(),
+			MessageNonceData::String(s) => s.into(),
+		}
+	}
+}
 impl Serialize for MessageNonce {
 	fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
-		match self {
-			MessageNonce::Snowflake(v) => v.serialize(serializer),
-			MessageNonce::String(v) => v.serialize(serializer),
+		match &self.0 {
+			MessageNonceData::Snowflake(v) => v.serialize(serializer),
+			MessageNonceData::String(v) => v.serialize(serializer),
 		}
 	}
 }
@@ -344,32 +370,85 @@ impl <'de> Visitor<'de> for NonceVisitor {
         formatter.write_str("snowflake")
     }
     fn visit_str<E>(self, v: &str) -> StdResult<MessageNonce, E> where E: DeError {
-		match v.parse::<u64>() {
-			Ok(i) => Ok(i.into()),
-			Err(_) => Ok(v.to_string().into()),
-		}
+		Ok(v.into())
     }
     snowflake_visitor_common!(MessageNonce);
 }
 impl From<u64> for MessageNonce {
 	fn from(i: u64) -> Self {
-		MessageNonce::Snowflake(i.into())
+		MessageNonce(MessageNonceData::Snowflake(i.into()))
 	}
 }
 impl From<Snowflake> for MessageNonce {
 	fn from(s: Snowflake) -> Self {
-		MessageNonce::Snowflake(s)
+		MessageNonce(MessageNonceData::Snowflake(s))
+	}
+}
+impl <'a> From<&'a str> for MessageNonce {
+	fn from(s: &'a str) -> Self {
+		match s.parse::<u64>() {
+			Ok(v) => MessageNonce(MessageNonceData::Snowflake(v.into())),
+			Err(_) => MessageNonce(MessageNonceData::String(s.to_string())),
+		}
 	}
 }
 impl From<String> for MessageNonce {
 	fn from(s: String) -> Self {
 		match s.parse::<u64>() {
-			Ok(v) => MessageNonce::Snowflake(v.into()),
-			Err(_) => MessageNonce::String(s),
+			Ok(v) => MessageNonce(MessageNonceData::Snowflake(v.into())),
+			Err(_) => MessageNonce(MessageNonceData::String(s)),
 		}
 	}
 }
-// TODO: PartialEq implementations
+impl PartialEq<str> for MessageNonce {
+	fn eq(&self, other: &str) -> bool {
+		match other.parse::<u64>() {
+			Ok(s) => self == &s,
+			Err(_) => match &self.0 {
+				MessageNonceData::Snowflake(_) => false,
+				MessageNonceData::String(s) => s == other,
+			}
+		}
+	}
+}
+impl PartialEq<MessageNonce> for str {
+	fn eq(&self, other: &MessageNonce) -> bool {
+		other == self
+	}
+}
+impl PartialEq<String> for MessageNonce {
+	fn eq(&self, other: &String) -> bool {
+		self == other.as_str()
+	}
+}
+impl PartialEq<MessageNonce> for String {
+	fn eq(&self, other: &MessageNonce) -> bool {
+		other == self
+	}
+}
+impl PartialEq<Snowflake> for MessageNonce {
+	fn eq(&self, other: &Snowflake) -> bool {
+		match &self.0 {
+			MessageNonceData::Snowflake(s) => s == other,
+			MessageNonceData::String(_) => false,
+		}
+	}
+}
+impl PartialEq<MessageNonce> for Snowflake {
+	fn eq(&self, other: &MessageNonce) -> bool {
+		other == self
+	}
+}
+impl PartialEq<u64> for MessageNonce {
+	fn eq(&self, other: &u64) -> bool {
+		self == &Snowflake(*other)
+	}
+}
+impl PartialEq<MessageNonce> for u64 {
+	fn eq(&self, other: &MessageNonce) -> bool {
+		other == self
+	}
+}
 
 /// Information related to a message in a channel.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]

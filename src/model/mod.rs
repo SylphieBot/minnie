@@ -1,7 +1,6 @@
 //! Types used to interact with the Discord API.
 
 // TODO: Add documentation for individual fields in the model.
-// TODO: Add Intos for Channel->ChannelId/&Channel->ChannelId, etc.
 
 macro_rules! into_id {
     ($ty:ty, $field_ty:ty, $field:ident) => {

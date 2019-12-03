@@ -435,7 +435,6 @@ pub fn start_shard(
             }
         };
         executor.spawn(
-            // TODO: *should* this trace its parents?
             fut.instrument(error_span!("shard", %id)),
         ).expect("Could not spawn future into given executor.");
     } else {

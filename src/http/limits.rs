@@ -18,8 +18,6 @@ use reqwest::header::*;
 use tokio::timer::Delay;
 use futures::FutureExt;
 
-// TODO: Add more logging just in case?
-
 /// A struct representing a rate limited API call.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 struct RateLimited {
@@ -157,7 +155,6 @@ impl RateLimit {
         &mut self, config: &HttpConfig,
         bucket_estimated: &mut Option<EstimatedLimits>, info: RateLimitHeaders,
     ) {
-        // TODO: Handle case where a reset is received out of order.
         let replace = match &mut self.data {
             RateLimitData::NoLimitAvailable => true,
             RateLimitData::ReceivedNoLimits => true,
@@ -169,7 +166,7 @@ impl RateLimit {
                     *remaining = min(*remaining, info.remaining);
                     false
                 } else {
-                    true
+                    estimated.first_seen < info.resets_at
                 }
             },
         };

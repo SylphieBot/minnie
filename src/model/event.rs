@@ -157,8 +157,8 @@ pub struct MessageCreateEvent(pub Message);
 pub struct MessageUpdateEvent {
     pub id: MessageId,
     pub channel_id: ChannelId,
+	pub author: User,
 	pub guild_id: Option<GuildId>,
-	pub author: User, // TODO: Is this always present in message updates?
     pub member: Option<MemberInfo>,
 	pub content: Option<String>,
 	pub timestamp: Option<DateTime<Utc>>,

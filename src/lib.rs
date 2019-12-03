@@ -2,7 +2,6 @@
 #![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
 
 // TODO: Consider adding APIs to allow creating Cow<'a, [T]> from iterators.
-// TODO: Look into the tracing crate.
 
 #[macro_use] extern crate derivative;
 #[macro_use] extern crate tracing;

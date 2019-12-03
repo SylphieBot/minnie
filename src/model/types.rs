@@ -351,7 +351,16 @@ impl From<Snowflake> for u64 {
         i.0
     }
 }
-// TODO: PartialEq implementations
+impl PartialEq<u64> for Snowflake {
+    fn eq(&self, other: &u64) -> bool {
+        self.0 == *other
+    }
+}
+impl PartialEq<Snowflake> for u64 {
+    fn eq(&self, other: &Snowflake) -> bool {
+        *self == other.0
+    }
+}
 
 /// A session ID for resuming sessions.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
@@ -439,6 +448,26 @@ macro_rules! id_structs {
         impl From<$name> for u64 {
             fn from(id: $name) -> u64 {
                 id.0.into()
+            }
+        }
+        impl PartialEq<u64> for $name {
+            fn eq(&self, other: &u64) -> bool {
+                (self.0).0 == *other
+            }
+        }
+        impl PartialEq<$name> for u64 {
+            fn eq(&self, other: &$name) -> bool {
+                *self == (other.0).0
+            }
+        }
+        impl PartialEq<Snowflake> for $name {
+            fn eq(&self, other: &Snowflake) -> bool {
+                (self.0).0 == other.0
+            }
+        }
+        impl PartialEq<$name> for Snowflake {
+            fn eq(&self, other: &$name) -> bool {
+                self.0 == (other.0).0
             }
         }
         impl fmt::Display for $name {

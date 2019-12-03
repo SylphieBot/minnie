@@ -168,7 +168,30 @@ impl Error {
         find_backtrace(self)
     }
 
-    // TODO: Add is_* helpers?
+    /// Returns `true` if this error was likely due to a bug in either user code or Minnie.
+    pub fn is_error(&self) -> bool {
+        match self.error_kind() {
+            ErrorKind::InternalError(_) | ErrorKind::InvalidInput(_) | ErrorKind::Panicked(_) =>
+                true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if this error was due to an IO or network problem.
+    pub fn is_io(&self) -> bool {
+        match self.error_kind() {
+            ErrorKind::IoError(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if this error originated from Discord.
+    pub fn is_discord(&self) ->  bool {
+        match self.error_kind() {
+            ErrorKind::DiscordBadResponse(_) | ErrorKind::RequestFailed(_, _, _) => true,
+            _ => false,
+        }
+    }
 }
 impl Fail for Error {
     fn name(&self) -> Option<&str> {

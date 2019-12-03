@@ -3,6 +3,7 @@ use crate::errors::*;
 use futures::compat::*;
 use futures::prelude::*;
 use flate2::{Decompress, FlushDecompress};
+use rand::seq::SliceRandom;
 use serde::*;
 use std::net::{ToSocketAddrs, SocketAddr};
 use std::time::{Instant, Duration};
@@ -17,9 +18,11 @@ use websocket::client::r#async::Framed;
 
 type RustlsWebsocket = Framed<TlsStream<TcpStream>, MessageCodec<OwnedMessage>>;
 fn resolve_url_socket(url: &Url) -> Result<SocketAddr> {
-    // TODO: Randomize or add some retry protocol.
-    let mut url_toks = url.to_socket_addrs().io_err("Could not resolve websocket domain.")?;
-    url_toks.next().io_err("Could not resolve websocket domain.")
+    let url_toks = url.to_socket_addrs().io_err("Could not resolve websocket domain.")?;
+    let url_toks: Vec<_> = url_toks.collect();
+    url_toks.choose(&mut rand::thread_rng())
+        .io_err("Could not resolve websocket domain.")
+        .map(Clone::clone)
 }
 fn make_dns_ref(url: &Url) -> Result<DNSNameRef> {
     let host_str = url.host_str().bad_response("Invalid websocket hostname.")?;
@@ -145,7 +148,6 @@ impl WebsocketConnection {
 
     pub async fn send(&mut self, data: impl Serialize) -> Result<()> {
         let json = serde_json::to_string(&data).unexpected()?;
-        info!("Send: {}", json); // TODO temp
         self.websocket.send(OwnedMessage::Text(json)).await
             .io_err("Could not send packet to websocket.")?;
         Ok(())
@@ -185,11 +187,9 @@ impl WebsocketConnection {
             match data {
                 Some(OwnedMessage::Binary(binary)) => {
                     let packet = unwrap_pkt!(self.decoder.decode_packet(&binary));
-                    info!("Recv: {}", ::std::str::from_utf8(packet).unwrap()); // TODO temp
                     return Ok(Response::Packet(unwrap_pkt!(parse(packet))))
                 }
                 Some(OwnedMessage::Text(text)) => {
-                    info!("Recv: {}", text); // TODO temp
                     if self.decoder.transport {
                         bail!(DiscordBadResponse, "Text received despite transport compression.");
                     }
