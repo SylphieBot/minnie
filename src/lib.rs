@@ -1,9 +1,8 @@
 #![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
-//#![deny(unused_must_use)]
-#![warn(missing_docs)]
+#![deny(unused_must_use)]
+//#![warn(missing_docs)]
 
 // TODO: Consider adding APIs to allow creating Cow<'a, [T]> from iterators.
-// TODO: Properly add an API for dealing with the image data formats expected by Discord.
 
 #[macro_use] extern crate derivative;
 #[macro_use] extern crate tracing;
