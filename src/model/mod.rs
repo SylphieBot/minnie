@@ -1,6 +1,8 @@
 //! Types used to interact with the Discord API.
 
 // TODO: Add documentation for individual fields in the model.
+// TODO: Handle malformed presence updates only for fields that might be incorrect.
+// TODO: Add better formats for image-related operations.
 
 macro_rules! into_id {
     ($ty:ty, $field_ty:ty, $field:ident) => {

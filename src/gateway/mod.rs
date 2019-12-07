@@ -112,6 +112,7 @@ impl <T: GatewayHandler> GatewayError<T> {
         }
     }
 
+    /// Returns a Minnie error for this gateway error, or `None` if it is not one.
     pub fn as_error(&self) -> Option<&Error> {
         match self {
             GatewayError::ConnectionError(err) |
@@ -124,6 +125,8 @@ impl <T: GatewayHandler> GatewayError<T> {
             _ => None,
         }
     }
+
+    /// Returns a [`Fail`] for this gateway error, or `None` if it is not one.
     pub fn as_fail(&self) -> Option<&dyn Fail> {
         if let Some(x) = self.as_error() {
             Some(x)
@@ -277,6 +280,7 @@ pub enum ShardFilter {
     Custom(#[derivative(Debug="ignore")] Arc<dyn Fn(u32) -> bool + Send + Sync>),
 }
 impl ShardFilter {
+    /// Whether this filter will accept a shard with the given ID.
     pub fn accepts_shard(&self, id: u32) -> bool {
         match self {
             ShardFilter::NoFilter => true,
@@ -320,6 +324,7 @@ pub struct GatewayConfig {
     pub backoff_variation: Option<Duration>,
 }
 impl GatewayConfig {
+    /// Creates a new configuration with the default settings.
     pub fn new() -> Self {
         Default::default()
     }
@@ -385,6 +390,7 @@ impl GatewayController {
         // Initialize the new gateway object.
         let config = self.shared.config.read().clone();
         let ctx = self.ctx();
+        // TODO: Add ratelimiting for get_gateway_bot.
         let endpoint = ctx.raw().get_gateway_bot().await?;
         let shard_count = match config.shard_count {
             Some(count) => count,

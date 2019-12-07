@@ -17,13 +17,19 @@ use std::time::{SystemTime, Duration};
 #[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct PresenceUpdate {
+    /// When this presence was last changed.
     #[serde(with = "utils::system_time_millis")]
     pub since: SystemTime,
+    /// The bot's current online status.
     pub status: UserStatus,
-
+    /// The activity the bot is currently engaged in.
+    ///
+    /// If you need to specify multiple activities, use the `activity` field instead.
     pub game: Option<Activity>,
+    /// A list of activities the bot is currently engaged in.
     #[setters(into)]
     pub activities: Option<Vec<Activity>>,
+    /// Whether the bot is AFK.
     #[setters(bool)]
     pub afk: bool,
 }
@@ -54,17 +60,23 @@ impl From<UserStatus> for PresenceUpdate {
 #[setters(strip_option, generate_private = "false")]
 #[non_exhaustive]
 pub struct GuildMembersRequest {
+    /// A list of guild IDs to request members for.
     #[setters(rename = "guild_ids", into)]
     pub guild_id: Vec<GuildId>,
+    /// A user prefix to search for.
     #[setters(into)]
     pub query: String,
+    /// The maximum number of users to return.
     pub limit: u32,
+    /// Whether to return presences for the users.
     #[setters(bool)]
     pub presences: bool,
+    /// A list of user IDs to request information about.
     #[setters(into)]
     pub user_ids: Option<Vec<UserId>>,
 }
 impl GuildMembersRequest {
+    /// Creates a request for the given guild ID.
     pub fn new(guild: GuildId) -> Self {
         GuildMembersRequest::default().guild_id(guild)
     }
@@ -245,12 +257,14 @@ impl GatewayPacket {
                     let ev = GatewayEvent::PresenceUpdate(
                         PresenceUpdateEvent(Presence {
                             user: d.user,
+                            nick: None,
                             roles: Vec::new(),
                             game: None,
                             guild_id: None,
                             status: None,
                             activites: Vec::new(),
                             client_status: None,
+                            premium_since: None,
                             malformed: true,
                         }),
                     );

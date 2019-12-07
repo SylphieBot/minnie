@@ -104,11 +104,15 @@ impl fmt::Display for PermissionOverwriteId {
 #[derive(Setters)]
 #[non_exhaustive]
 pub struct PermissionOverwrite {
+    /// The user or role the permission overwrite is for.
     pub id: PermissionOverwriteId,
+    /// The permissions the user or role is explicitly allowed.
     pub allow: EnumSet<Permission>,
+    /// The permissions the user or role is explicitly denied.
     pub deny: EnumSet<Permission>,
 }
 impl PermissionOverwrite {
+    #[allow(missing_docs)]
     pub fn new(
         id: impl Into<PermissionOverwriteId>,
         allow: impl Into<EnumSet<Permission>>, deny: impl Into<EnumSet<Permission>>,
@@ -160,9 +164,12 @@ impl <'de> Deserialize<'de> for PermissionOverwrite {
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct PartialChannel {
+    /// The ID of this channel.
     pub id: ChannelId,
+    /// What type of channel this is.
     #[serde(rename = "type")]
     pub channel_type: ChannelType,
+    /// The channel's name.
     pub name: Option<String>,
 }
 into_id!(PartialChannel, ChannelId, id);
@@ -217,7 +224,9 @@ into_id!(Channel, ChannelId, id);
 #[non_exhaustive]
 #[repr(i32)]
 pub enum InviteTargetUserType {
+    /// Invite the user to watch a stream.
     Stream = 1,
+    /// An unknown invite type.
     #[serde(other)]
     Unknown = i32::max_value(),
 }
@@ -227,12 +236,21 @@ pub enum InviteTargetUserType {
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct Invite {
+    /// The code of the invite.
     pub code: String,
+    /// The guild the user is invited to.
     pub guild: Option<PartialGuild>,
+    /// The channel the user is invited to.
     pub channel: PartialChannel,
+    /// The specific user this invite is targeted at.
     pub target_user: Option<User>,
+    /// What the specific user is invited to do.
     pub target_user_type: Option<InviteTargetUserType>,
+    /// An estimate of the number of online users in the guild.
+    ///
+    /// Only available when `target_user` is set.
     pub approximate_presence_count: Option<u32>,
+    /// An estimate of the number of members in the guild.
     pub approximate_member_count: Option<u32>,
 }
 impl Invite {
@@ -246,17 +264,24 @@ impl Invite {
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
 pub struct InviteMetadata {
+    /// The user who created the invite.
     pub inviter: User,
+    /// The number of uses remaining for the invite.
     pub uses: u32,
+    /// The number of uses this invite was created with.
     pub max_uses: u32,
+    /// How long until this invite expires.
     #[serde(with = "utils::duration_secs")]
     pub max_age: Duration,
+    /// Whether the user is only granted temporary membership.
     pub temporary: bool,
+    /// When this invite was created.
     pub created_at: DateTime<Utc>,
 }
 
 /// An invite to a channel or guild with metadata.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[allow(missing_docs)]
 pub struct InviteWithMetadata {
     #[serde(flatten)]
     pub invite: Invite,

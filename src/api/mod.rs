@@ -10,6 +10,8 @@ use crate::model::message::Message;
 use crate::model::types::*;
 
 // TODO: Create iterators based on the various get_* functions.
+// TODO: Consider various API extensions based on full message/user/etc objects.
+// TODO: Solidify the ordering of the reason/token methods in call chains, etc.
 
 macro_rules! fut_builder {
     (

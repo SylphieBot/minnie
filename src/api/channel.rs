@@ -108,12 +108,14 @@ impl <'a> ChannelOps<'a> {
     /// Completely overwrites the permission overwrite for a given user or role.
     ///
     /// If the given `allow` and `deny` sets are both empty, the overwrite is instead deleted.
+    /// Explicitly allowed permissions have precedence over explicitly denied permissions.
     pub async fn set_permissions(
         self, overwrite: impl Into<PermissionOverwriteId>,
         allow: impl Into<EnumSet<Permission>>, deny: impl Into<EnumSet<Permission>>,
     ) -> Result<()> {
         let allow = allow.into();
-        let deny = deny.into();
+        let mut deny = deny.into();
+        deny -= allow;
         if allow.is_empty() && deny.is_empty() {
             self.raw.delete_channel_permission(self.id, overwrite.into()).await
         } else {
@@ -432,7 +434,8 @@ fut_builder! {
         self.params.max_age = Some(0);
     }
 
-    /// The maximum number of times. If set to zero, the invite can be used any number of times.
+    /// Sets the maximum number of times this invite can be used. If set to zero, the invite can be
+    /// used any number of times.
     pub fn max_uses(&mut self, uses: u32) {
         self.params.max_uses = Some(uses);
     }
@@ -513,13 +516,11 @@ fut_builder! {
         self.params.embed = Some(embed.into());
     }
 
-    /// Sets the whether embeds are suppressed on the post.
-    pub fn suppress_embeds(&mut self, suppress: bool) {
-        let flags = self.params.flags.get_or_insert(EnumSet::new());
-        if suppress {
-            flags.insert(MessageFlag::SuppressEmbeds);
-        } else {
-            flags.remove(MessageFlag::SuppressEmbeds);
-        }
+    /// Sets the new flags on this post.
+    ///
+    /// Note that this should be a complete copy of all flags the message should have, even those
+    /// that cannot be changed by bots, for future compatibility reasons.
+    pub fn flags(&mut self, flags: impl Into<EnumSet<MessageFlag>>) {
+        self.params.flags = Some(flags.into());
     }
 }

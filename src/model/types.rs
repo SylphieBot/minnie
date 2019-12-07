@@ -236,8 +236,7 @@ impl <'de> Deserialize<'de> for EmojiRef {
 pub struct Snowflake(pub u64);
 impl Serialize for Snowflake {
     fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
-        let id_str = self.0.to_string();
-        id_str.serialize(serializer)
+        serializer.collect_str(&self.0)
     }
 }
 impl <'de> Deserialize<'de> for Snowflake {

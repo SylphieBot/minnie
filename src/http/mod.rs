@@ -46,6 +46,7 @@ pub struct HttpConfig {
     pub max_wait_for_active: Duration,
 }
 impl HttpConfig {
+    /// Creates a default http configuration.
     pub fn new() -> Self {
         Default::default()
     }
@@ -571,6 +572,7 @@ routes! {
     route get_user_dms() -> Vec<Channel> {
         request: get("/users/@me/channels"),
     }
+    /// Creates a DM channel with a user.
     route create_dm(user: UserId) -> Channel {
         let params = CreateDMJsonParams { recipient_id: user };
         request: post("/users/@me/channels").json(&params),

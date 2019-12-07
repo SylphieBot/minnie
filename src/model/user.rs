@@ -6,6 +6,7 @@ use crate::serde::*;
 use std::borrow::Cow;
 use std::fmt;
 use std::time::SystemTime;
+use chrono::{DateTime, Utc};
 
 /// The discriminator for a user.
 ///
@@ -166,6 +167,8 @@ pub struct ClientStatus {
 #[non_exhaustive]
 pub struct Presence {
     pub user: PartialUser,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nick: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub roles: Vec<RoleId>,
     pub game: Option<Activity>,
@@ -174,6 +177,8 @@ pub struct Presence {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub activites: Vec<Activity>,
     pub client_status: Option<ClientStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub premium_since: Option<DateTime<Utc>>,
 
     #[serde(default, skip_serializing_if = "utils::if_false", rename = "$malformed")]
     /// This field is set to true if this `Presence Update` packet could not be parsed.

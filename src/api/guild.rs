@@ -147,6 +147,7 @@ impl <'a> MemberOps<'a> {
 
     // TODO: Ban
 
+    /// Unbans a user from the guild.
     pub async fn unban(self) -> Result<()> {
         self.raw.remove_guild_ban(self.guild_id, self.user_id).await
     }
