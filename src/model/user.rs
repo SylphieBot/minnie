@@ -115,13 +115,14 @@ pub enum UserFlags {
     DiscordEmployee = 0,
     DiscordPartner = 1,
     HypeSquadEvents = 2,
-    BugHunter = 3,
+    BugHunterLevel1 = 3,
     HouseBravery = 6,
     HouseBrilliance = 7,
     HouseBalance = 8,
     EarlySupporter = 9,
     TeamUser = 10,
     System = 12,
+    BugHunterLevel2 = 14,
 }
 
 /// The kind of Nitro subscription a user has.

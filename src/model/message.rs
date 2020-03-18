@@ -257,6 +257,8 @@ pub enum MessageType {
 	UserPremiumGuildSubscriptionTier2 = 10,
 	UserPremiumGuildSubscriptionTier3 = 11,
 	ChannelFollowAdd = 12,
+	GuildDiscoveryDisqualified = 13,
+	GuildDiscoveryRequalified = 14,
     #[serde(other)]
     Unknown = i32::max_value(),
 }

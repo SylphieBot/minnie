@@ -205,6 +205,13 @@ impl <'a> MessageOps<'a> {
         self.raw.delete_all_reactions(self.channel_id, self.message_id).await
     }
 
+    /// Deletes all reactions with a given emoji from a message.
+    pub async fn clear_reactions_for_emoji(self, emoji: &EmojiRef) -> Result<()> {
+        self.raw.delete_all_reactions_for_emoji(
+            self.channel_id, self.message_id, emoji,
+        ).await
+    }
+
     /// Edits this message.
     /// 
     /// This has similar parameters to posting messages, but only [`content`](`EditFut::content`)
@@ -366,6 +373,12 @@ fut_builder! {
         files: Vec<CreateMessageFile<'a>>,
     }
     into_async!(|ops, data| -> Result<Message> {
+        if let Some(mentions) = &data.params.allowed_mentions {
+            if mentions.parse.is_some() && (mentions.users.is_some() || mentions.roles.is_some()) {
+                bail!(InvalidInput, "Cannot use allowed mention types in addition to allowed \
+                                     user or roles.");
+            }
+        }
         if data.files.is_empty() && data.params.content.is_none() && data.params.embed.is_none() {
             bail!(InvalidInput, "At least one of `content` or `embed` must be set, or a file must \
                                  be uploaded.");
@@ -414,6 +427,48 @@ fut_builder! {
     /// Attaches a file to the message.
     pub fn file(&mut self, file: CreateMessageFile<'a>) {
         self.files.push(file);
+    }
+
+    /// Disallows all mentions.
+    pub fn disallow_mentions(&mut self) {
+        self.params.allowed_mentions = Some(AllowedMentions::default());
+    }
+
+    /// A list of mention types allowed in the message.
+    pub fn mention_types(&mut self, types: impl Into<EnumSet<MentionType>>) {
+        self.params.allowed_mentions
+            .get_or_insert_with(|| AllowedMentions::default())
+            .parse = Some(types.into());
+    }
+
+    /// Allows a user to be mentioned..
+    pub fn mention_user(&mut self, user: impl Into<UserId>) {
+        self.params.allowed_mentions
+            .get_or_insert_with(|| AllowedMentions::default())
+            .users.get_or_insert_with(|| Vec::new())
+            .push(user.into());
+    }
+
+    /// Allows a list of users to be mentioned..
+    pub fn mention_users(&mut self, users: impl IntoIterator<Item = impl Into<UserId>>) {
+        for user in users {
+            self.mention_user(user);
+        }
+    }
+
+    /// Allows a role to be mentioned..
+    pub fn mention_role(&mut self, role: impl Into<RoleId>) {
+        self.params.allowed_mentions
+            .get_or_insert_with(|| AllowedMentions::default())
+            .roles.get_or_insert_with(|| Vec::new())
+            .push(role.into());
+    }
+
+    /// Allows a list of roles to be mentioned..
+    pub fn mention_roles(&mut self, roles: impl IntoIterator<Item = impl Into<RoleId>>) {
+        for role in roles {
+            self.mention_role(role);
+        }
     }
 }
 

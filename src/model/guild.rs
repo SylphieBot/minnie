@@ -274,7 +274,8 @@ pub struct Guild {
     pub large: bool,
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub unavailable: bool,
-    pub member_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_count: Option<u64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub voice_states: Vec<VoiceState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

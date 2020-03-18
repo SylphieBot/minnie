@@ -341,8 +341,45 @@ pub struct CreateMessageParams<'a> {
     /// The embed to attach to the post.
     #[setters(into)]
     pub embed: Option<Embed<'a>>,
+    /// The types of mentions allowed in the post.
+    pub allowed_mentions: Option<AllowedMentions>,
 }
 new_from_default!(CreateMessageParams);
+
+/// A type of mention..
+#[derive(Serialize, Deserialize, EnumSetType, Ord, PartialOrd, Debug, Hash)]
+#[enumset(serialize_as_list)]
+#[serde(rename_all = "lowercase")]
+#[non_exhaustive]
+pub enum MentionType {
+    /// Allows mentioning any role.
+	Roles,
+    /// Allows mentioning any user individually.
+	Users,
+    /// Allows mentioning `@everyone`.
+	Everyone,
+}
+
+/// Defines mentions allowed in a message.
+#[serde_with::skip_serializing_none]
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[derive(Setters)]
+#[setters(strip_option, generate_private = "false")]
+#[non_exhaustive]
+pub struct AllowedMentions {
+    /// A list of mention types allowed in the message.
+    ///
+    /// Mutually exclusive with `roles` and `users`.
+    pub parse: Option<EnumSet<MentionType>>,
+    /// A list of roles mentions allowed in the message.
+    ///
+    /// Mutually exclusive with `parse`.
+    pub roles: Option<Vec<RoleId>>,
+    /// A list of user mentions allowed in the message.
+    ///
+    /// Mutually exclusive with `parse`.
+    pub users: Option<Vec<UserId>>,
+}
 
 /// A file to pass to the `Create Messages` endpoint.
 #[serde_with::skip_serializing_none]

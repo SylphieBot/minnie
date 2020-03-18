@@ -5,6 +5,7 @@ use crate::errors::*;
 use crate::model::event::*;
 use crate::model::types::*;
 use derive_setters::*;
+use enumset::EnumSet;
 use failure::Fail;
 use fnv::FnvHashMap;
 use parking_lot::{Mutex, RwLock};
@@ -248,9 +249,18 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// For any event where this method returns `true`, the library will not parse the event,
     /// and [`GatewayHandler::on_event`] will not be called.
     ///
+    /// This is independent of gateway intents.
+    ///
     /// Returns `false` by default.
     fn ignores_event(&self, _: &GatewayContext, _: &GatewayEventType) -> bool {
         false
+    }
+
+    /// Returns the intents this gateway handler listens to.
+    ///
+    /// By default, the gateway will attempt to subscribe to all events possible.
+    fn intents(&self) -> EnumSet<GatewayIntent> {
+        EnumSet::all()
     }
 }
 

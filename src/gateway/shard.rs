@@ -11,6 +11,7 @@ use crate::model::types::*;
 use crate::ws::*;
 use crate::ws::Response::*;
 use crossbeam_channel::{self, Receiver, Sender};
+use enumset::EnumSet;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -302,6 +303,7 @@ async fn running_shard(
                         shard: Some(shard.id),
                         presence: Some(shard.gateway.shared.presence.read().clone()),
                         guild_subscriptions: config.guild_subscription,
+                        intents: Some(dispatch.intents()),
                     };
                     send!(Identify, None, pkt);
                     conn_phase = Authenticating;

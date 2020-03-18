@@ -127,6 +127,7 @@ pub struct PacketIdentify {
     pub presence: Option<PresenceUpdate>,
     #[serde(default, skip_serializing_if = "utils::if_true")]
     pub guild_subscriptions: bool,
+    pub intents: Option<EnumSet<GatewayIntent>>,
 }
 
 /// The contents of the `Update Voice State` packet.

@@ -316,6 +316,10 @@ routes! {
     route delete_all_reactions(ch: ChannelId, msg: MessageId) on ch {
         request: delete("/channels/{}/messages/{}/reactions", ch.0, msg.0),
     }
+    /// Deletes all reactions with a certain emoji from a message.
+    route delete_all_reactions_for_emoji(ch: ChannelId, msg: MessageId, emoji: &EmojiRef) on ch {
+        request: delete("/channels/{}/messages/{}/reactions/{}", ch.0, msg.0, emoji),
+    }
     /// Edits a message.
     route edit_message(ch: ChannelId, msg: MessageId, %params: EditMessageParams<'_>) on ch -> Message {
         request: patch("/channels/{}/messages/{}", ch.0, msg.0).json(&params),

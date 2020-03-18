@@ -26,6 +26,11 @@ macro_rules! fut_builder {
             $($async_body:tt)*
         });
         $(
+            helper fn $helper_fn_name:ident($($helper_args:tt)*) $(-> $helper_ty:ty)? {
+                $($helper_body:tt)*
+            }
+        )*
+        $(
             $(#[$fn_meta:meta])*
             $fn_vis:vis fn $fn_name:ident(
                 &mut self $(, $param_name:ident: $param_ty:ty)* $(,)?
@@ -76,6 +81,11 @@ macro_rules! fut_builder {
             pub struct $ops_name<$lt>(State<$lt>);
 
             impl <$lt> Data<$lt> {
+                $(
+                    fn $helper_fn_name($($helper_args)*) $(-> $helper_ty)? {
+                        $($helper_body)*
+                    }
+                )*
                 $(
                     #[allow(unused_mut)]
                     fn $fn_name(&mut $self_ident, $($param_name: $param_ty,)*) {

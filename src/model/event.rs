@@ -170,6 +170,42 @@ pub struct GuildRoleDeleteEvent {
     pub role_id: RoleId,
 }
 
+/// A `Invite Create` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct InviteCreateEvent {
+    /// The ID of the channel the invite is to.
+    pub channel_id: ChannelId,
+    /// The guild the channel is in, if any.
+    pub guild_id: Option<GuildId>,
+    /// The invite's code.
+    pub code: String,
+    /// The time at which the invite was created.
+    pub created_at: Option<DateTime<Utc>>,
+    /// The user that created the invite.
+    pub inviter: Option<User>,
+    /// How may seconds the invite is valid for.
+    pub max_age: Option<i32>,
+    /// How many times the invite can be used.
+    pub max_uses: Option<i32>,
+    /// Whether the invite is temporary.
+    pub temporary: bool,
+    /// How many times the invite has been used.
+    pub uses: Option<i32>,
+}
+
+/// A `Invite Delete` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct InviteDeleteEvent {
+    /// The ID of the channel the invite is to.
+    pub channel_id: ChannelId,
+    /// The guild the channel is in, if any.
+    pub guild_id: Option<GuildId>,
+    /// The invite's code.
+    pub code: String,
+}
+
 /// A `Channel Pins Update` event.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -293,10 +329,24 @@ pub struct MessageReactionRemoveEvent {
 pub struct MessageReactionRemoveAllEvent {
     /// The channel the message is in.
     pub channel_id: ChannelId,
-    /// The message all reactions were remov
-    //    /// The guild the channel is in, if any.ed on.
+    /// The message all reactions were removed on.
     pub message_id: MessageId,
+    /// The guild the channel is in, if any.
     pub guild_id: Option<GuildId>,
+}
+
+/// A `Message Reaction Remove Emoji` event.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
+pub struct MessageReactionRemoveEmojiEvent {
+    /// The channel the message is in.
+    pub channel_id: ChannelId,
+    /// The message all reactions were removed on.
+    pub message_id: MessageId,
+    /// The guild the channel is in, if any.
+    pub guild_id: Option<GuildId>,
+    /// The emoji the user removed.
+    pub emoji: Emoji,
 }
 
 /// A `Presence Update` event that failed to parse.
@@ -413,6 +463,8 @@ pub enum GatewayEvent {
     GuildRoleCreate(GuildRoleCreateEvent),
     GuildRoleUpdate(GuildRoleUpdateEvent),
     GuildRoleDelete(GuildRoleDeleteEvent),
+    InviteCreate(InviteCreateEvent),
+    InviteDelete(InviteDeleteEvent),
     MessageCreate(MessageCreateEvent),
     MessageUpdate(MessageUpdateEvent),
     MessageDelete(MessageDeleteEvent),
@@ -420,6 +472,7 @@ pub enum GatewayEvent {
     MessageReactionAdd(MessageReactionAddEvent),
     MessageReactionRemove(MessageReactionRemoveEvent),
     MessageReactionRemoveAll(MessageReactionRemoveAllEvent),
+    MessageReactionRemoveEmoji(MessageReactionRemoveEmojiEvent),
     PresenceUpdate(PresenceUpdateEvent),
     PresencesReplace(PresencesReplaceEvent),
     Ready(ReadyEvent),
@@ -433,7 +486,7 @@ pub enum GatewayEvent {
 
 /// An enum representing the type of event that occurred.
 #[derive(Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
-#[derive(EnumString, Display, AsRefStr, IntoStaticStr)]
+#[derive(EnumString, Display, AsRefStr, IntoStaticStr, EnumIter)]
 #[strum(serialize_all = "shouty_snake_case")]
 #[non_exhaustive]
 #[allow(missing_docs)]
@@ -456,6 +509,8 @@ pub enum GatewayEventType {
     GuildRoleCreate,
     GuildRoleUpdate,
     GuildRoleDelete,
+    InviteCreate,
+    InviteDelete,
     MessageCreate,
     MessageUpdate,
     MessageDelete,
@@ -463,6 +518,7 @@ pub enum GatewayEventType {
     MessageReactionAdd,
     MessageReactionRemove,
     MessageReactionRemoveAll,
+    MessageReactionRemoveEmoji,
     PresenceUpdate,
     PresencesReplace,
     Ready,
@@ -474,6 +530,46 @@ pub enum GatewayEventType {
     WebhooksUpdate,
     #[strum(disabled="true")]
     Unknown(String),
+}
+impl GatewayEventType {
+    /// The intent this gateway event uses.
+    pub fn intent(&self) -> Option<EnumSet<GatewayIntent>> {
+        use GatewayEventType::*;
+        match self {
+            GuildCreate | GuildDelete | GuildRoleCreate | GuildRoleUpdate | GuildRoleDelete |
+            ChannelUpdate | ChannelDelete | ChannelPinsUpdate
+                => Some(GatewayIntent::Guilds.into()),
+            GuildMemberAdd | GuildMemberUpdate | GuildMemberRemove
+                => Some(GatewayIntent::GuildMembers.into()),
+            GuildBanAdd | GuildBanRemove
+                => Some(GatewayIntent::GuildBans.into()),
+            GuildEmojisUpdate
+                => Some(GatewayIntent::GuildEmojis.into()),
+            GuildIntegrationsUpdate
+                => Some(GatewayIntent::GuildIntegrations.into()),
+            WebhooksUpdate
+                => Some(GatewayIntent::GuildWebhooks.into()),
+            InviteCreate | InviteDelete
+                => Some(GatewayIntent::GuildInvites.into()),
+            VoiceStateUpdate
+                => Some(GatewayIntent::GuildVoiceStates.into()),
+            PresenceUpdate
+                => Some(GatewayIntent::GuildPresences.into()),
+            MessageCreate | MessageUpdate | MessageDelete
+                => Some(GatewayIntent::GuildMessages |
+                        GatewayIntent::DirectMessages),
+            MessageReactionAdd | MessageReactionRemove |
+            MessageReactionRemoveAll | MessageReactionRemoveEmoji
+                => Some(GatewayIntent::GuildMessageReactions |
+                        GatewayIntent::DirectMessageReactions),
+            TypingStart
+                => Some(GatewayIntent::GuildMessageTyping |
+                        GatewayIntent::DirectMessageTyping),
+            ChannelCreate
+                => Some(GatewayIntent::Guilds | GatewayIntent::DirectMessages),
+            _ => None,
+        }
+    }
 }
 
 impl Serialize for GatewayEventType {
@@ -517,5 +613,35 @@ impl <'de> Visitor<'de> for EventTypeVisitor {
     fn visit_byte_buf<E>(self, v: Vec<u8>) -> StdResult<Self::Value, E> where E: DeError {
         let s = String::from_utf8(v).map_err(|_| E::custom("byte string is not UTF-8"))?;
         self.visit_string(s)
+    }
+}
+
+/// An enum representing a category of events.
+#[derive(EnumSetType, Debug)]
+#[non_exhaustive]
+pub enum GatewayIntent {
+    Guilds = 0,
+    GuildMembers = 1,
+    GuildBans = 2,
+    GuildEmojis = 3,
+    GuildIntegrations = 4,
+    GuildWebhooks = 5,
+    GuildInvites = 6,
+    GuildVoiceStates = 7,
+    GuildPresences = 8,
+    GuildMessages = 9,
+    GuildMessageReactions = 10,
+    GuildMessageTyping = 11,
+    DirectMessages = 12,
+    DirectMessageReactions = 13,
+    DirectMessageTyping = 14,
+}
+impl GatewayIntent {
+    /// Returns true if a gateway privilege requires special permissions.
+    pub fn is_privileged(&self) -> bool {
+        match self {
+            GatewayIntent::GuildMembers | GatewayIntent::GuildPresences => true,
+            _ => false,
+        }
     }
 }
