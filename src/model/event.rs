@@ -199,7 +199,7 @@ pub struct MessageUpdateEvent {
     /// The ID of the channel the message is in.
     pub channel_id: ChannelId,
     /// The author of the message.
-	pub author: User,
+	pub author: Option<User>,
     /// The guild the channel is in, if any.
 	pub guild_id: Option<GuildId>,
     /// Guild-specific information relating to the author.

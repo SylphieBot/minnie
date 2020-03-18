@@ -7,15 +7,14 @@ use crate::model::types::*;
 use derive_setters::*;
 use failure::Fail;
 use fnv::FnvHashMap;
-use futures::compat::*;
-use futures::task::Spawn;
 use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use std::fmt::Write;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::timer::Delay;
-use websocket::CloseData;
+use std::time::Duration;
+use tokio::time;
+use tokio::runtime::Handle;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 
 mod model;
 mod shard;
@@ -50,7 +49,7 @@ pub enum GatewayError<T: GatewayHandler> {
     /// The remote host cleanly closed the Websocket connection.
     ///
     /// This error cannot be ignored.
-    RemoteHostDisconnected(Option<CloseData>),
+    RemoteHostDisconnected(Option<CloseFrame<'static>>),
     /// The error occurred while connecting to the gateway.
     ///
     /// This error cannot be ignored.
@@ -352,7 +351,7 @@ struct CurrentGateway {
 impl CurrentGateway {
     async fn wait_shutdown(&self) {
         loop {
-            Delay::new(Instant::now() + Duration::from_millis(100)).compat().await.ok();
+            time::delay_for(Duration::from_millis(100).into()).await;
             if self.shards.iter().all(|x| x.is_shutdown()) {
                 return
             }
@@ -385,7 +384,7 @@ impl GatewayController {
     /// Connects the bot to the Discord gateway. If the bot is already connected, it disconnects
     /// the previous connection.
     pub async fn connect(
-        &self, executor: &mut impl Spawn, dispatch: impl GatewayHandler,
+        &self, executor: &Handle, dispatch: impl GatewayHandler,
     ) -> Result<()> {
         // Initialize the new gateway object.
         let config = self.shared.config.read().clone();
@@ -424,9 +423,7 @@ impl GatewayController {
         // Start each shard in the gateway.
         let dispatch = Arc::new(dispatch);
         for shard in &gateway_state.shards {
-            shard::start_shard(
-                ctx.clone(), shard.clone(), executor, dispatch.clone(),
-            );
+            shard::start_shard(ctx.clone(), shard.clone(), executor, dispatch.clone());
         }
 
         Ok(())

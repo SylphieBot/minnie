@@ -11,13 +11,12 @@ use crate::model::types::*;
 use crate::ws::*;
 use crate::ws::Response::*;
 use crossbeam_channel::{self, Receiver, Sender};
-use futures::compat::*;
-use futures::task::{Spawn, SpawnExt};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use tokio::timer::Delay;
+use tokio::runtime::Handle;
+use tokio::time;
 use tracing_futures::*;
 use url::*;
 
@@ -251,7 +250,7 @@ async fn running_shard(
                     *session = ShardSession::Inactive;
                 }
                 let wait_time = Duration::from_secs_f64(rand::random::<f64>() * 4.0 + 1.0);
-                Delay::new(Instant::now() + wait_time).compat().await.ok();
+                time::delay_for(wait_time.into()).await;
                 need_connect = true;
             }
             Ok(Packet(GatewayPacket::Dispatch(seq, t, data))) if conn_phase != Initial => {
@@ -398,7 +397,7 @@ async fn shard_main_loop(
             ShardStatus::ReconnectWithBackoff => {
                 info!("Waiting {} seconds before reconnecting shard #{}...",
                       reconnect_delay.as_millis() as f32 / 1000.0, shard.id);
-                Delay::new(Instant::now() + reconnect_delay).compat().await.ok();
+                time::delay_for(reconnect_delay.into()).await;
                 let variation = config.backoff_variation.unwrap_or(Duration::from_secs(0));
                 let f32_secs =
                     reconnect_delay.as_secs_f64() * config.backoff_factor +
@@ -416,12 +415,14 @@ async fn shard_main_loop(
 pub fn start_shard(
     ctx: DiscordContext,
     shard: Arc<ShardState>,
-    executor: &mut impl Spawn,
+    handle: &Handle,
     dispatch: Arc<impl GatewayHandler>,
 ) {
     if !shard.started.compare_and_swap(false, true, Ordering::Relaxed) {
         let id = shard.id;
+        debug!("shard before {}", id);
         let fut = async move {
+            debug!("shard after {}", id);
             let gateway_ctx = GatewayContext {
                 ctx,
                 shard_id: shard.id,
@@ -434,9 +435,7 @@ pub fn start_shard(
                 dispatch.report_error(&gateway_ctx, GatewayError::Panicked(e));
             }
         };
-        executor.spawn(
-            fut.instrument(error_span!("shard", %id)),
-        ).expect("Could not spawn future into given executor.");
+        handle.spawn(fut.instrument(error_span!("shard", %id)));
     } else {
         panic!("Shard #{} already started.", shard.id);
     }

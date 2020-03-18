@@ -3,7 +3,6 @@ use crate::http::{SENTINEL, DiscordError, DiscordErrorCode, HttpConfig};
 use crate::model::types::Snowflake;
 use crate::serde::*;
 use fnv::FnvHashMap;
-use futures::compat::*;
 use parking_lot::Mutex;
 use std::cmp::{max, min};
 use std::fmt;
@@ -13,9 +12,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, Duration, UNIX_EPOCH, Instant};
 use reqwest::StatusCode;
-use reqwest::r#async::{Response, RequestBuilder};
+use reqwest::{Response, RequestBuilder};
 use reqwest::header::*;
-use tokio::timer::Delay;
+use tokio::time;
 use futures::FutureExt;
 
 /// A struct representing a rate limited API call.
@@ -283,7 +282,7 @@ impl Bucket {
 pub type GlobalLimit = Mutex<Option<Instant>>;
 async fn wait_until(time: Instant) {
     if time > Instant::now() {
-        Delay::new(time).compat().await.unwrap();
+        time::delay_until(time.into()).await;
     }
 }
 fn push_global_rate_limit(global_limit: &GlobalLimit, target: Instant) {
@@ -352,8 +351,7 @@ fn parse_header<T: FromStr>(
         None => Ok(None),
     }
 }
-fn parse_headers(response: &Response) -> Result<Option<RateLimitHeaders>> {
-    let headers = response.headers();
+fn parse_headers(headers: &HeaderMap) -> Result<Option<RateLimitHeaders>> {
     let now = Instant::now();
 
     let global      = parse_header::<bool>(headers, "X-RateLimit-Global")?.unwrap_or(false);
@@ -408,22 +406,23 @@ async fn check_response<'a>(
     if let Some(reason) = &reason {
         request = request.header("X-Audit-Log-Reason", reason);
     }
-    let mut response = request.send().compat().await.io_err("Failed to make API request.")?;
+    let response = request.send().await.io_err("Failed to make API request.")?;
     if response.status().is_success() {
-        let rate_info = parse_headers(&response)?;
+        let rate_info = parse_headers(response.headers())?;
         Ok(ResponseStatus::Success(rate_info, response))
     } else if response.status() == StatusCode::TOO_MANY_REQUESTS {
-        let rate_info = response.json::<RateLimited>().compat().await
+        let headers_tmp = response.headers().clone(); // can we avoid this clone?
+        let rate_info = response.json::<RateLimited>().await
             .context(ErrorKind::DiscordBadResponse("Could not parse rate limit information."))?;
         debug!("Encountered rate limit: {:?}", rate_info);
         if rate_info.global {
             Ok(ResponseStatus::GloballyRateLimited(rate_info.retry_after))
         } else {
-            Ok(ResponseStatus::RateLimited(parse_headers(&response)?, rate_info.retry_after))
+            Ok(ResponseStatus::RateLimited(parse_headers(&headers_tmp)?, rate_info.retry_after))
         }
     } else {
         let status = response.status();
-        let discord_error = match response.json::<DiscordError>().compat().await {
+        let discord_error = match response.json::<DiscordError>().await {
             Ok(v) => v,
             Err(_) => DiscordError { code: DiscordErrorCode::NoStatusSent, message: None },
         };

@@ -194,7 +194,7 @@ pub struct VoiceState {
     pub mute: bool,
     pub self_deaf: bool,
     pub self_mute: bool,
-    pub self_stream: bool,
+    pub self_stream: Option<bool>,
     pub suppress: bool,
 }
 

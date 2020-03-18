@@ -9,10 +9,10 @@ use crate::model::types::*;
 use crate::model::user::*;
 use crate::serde::*;
 use derive_setters::*;
-use futures::compat::*;
 use parking_lot::Mutex;
-use reqwest::r#async::multipart::Form;
+use reqwest::multipart::Form;
 use serde_json;
+use std::error::{Error as StdError};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing_futures::*;
@@ -222,8 +222,8 @@ macro_rules! routes {
                         rate_id,
                         stringify!($name),
                     ).await?;
-                    Ok(($(_response.json::<$ty>().compat().await.map_err(|x| {
-                        let kind = if x.is_serialization() {
+                    Ok(($(_response.json::<$ty>().await.map_err(|x| {
+                        let kind = if x.source().map_or(false, |x| x.is::<serde_json::Error>()) {
                             ErrorKind::DiscordBadResponse("Could not parse API response.")
                         } else {
                             ErrorKind::IoError("Failed to receive API response.")

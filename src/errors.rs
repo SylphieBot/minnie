@@ -16,8 +16,8 @@ use std::io::{Error as IoError};
 use std::num::{ParseIntError, ParseFloatError};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::str::ParseBoolError;
+use tokio_tungstenite::tungstenite::{Error as TungsteniteError};
 use webpki::InvalidDNSNameError;
-use websocket::WebSocketError;
 
 pub use std::result::{Result as StdResult};
 
@@ -41,7 +41,7 @@ macro_rules! lib_error {
 }
 lib_error! {
     DecompressError, InvalidDNSNameError, IoError, ParseBoolError, ParseIntError, ParseFloatError,
-    ReqwestError, InvalidHeaderValue, ReqwestToStrError, SerdeJsonError, WebSocketError,
+    ReqwestError, InvalidHeaderValue, ReqwestToStrError, SerdeJsonError, TungsteniteError,
 }
 impl From<Infallible> for LibError {
     fn from(_: Infallible) -> Self {

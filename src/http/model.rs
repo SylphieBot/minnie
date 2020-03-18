@@ -6,7 +6,7 @@ use crate::model::message::*;
 use crate::model::types::*;
 use crate::serde::*;
 use derive_setters::*;
-use reqwest::r#async::multipart::Part;
+use reqwest::multipart::Part;
 use std::borrow::Cow;
 use std::fmt;
 use std::marker::PhantomData;

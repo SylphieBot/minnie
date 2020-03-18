@@ -1,25 +1,25 @@
 use crate::context::DiscordContext;
 use crate::errors::*;
-use futures::compat::*;
-use futures::prelude::*;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use flate2::{Decompress, FlushDecompress};
+use http::Request;
 use rand::seq::SliceRandom;
 use serde::*;
-use std::net::{ToSocketAddrs, SocketAddr};
+use std::net::SocketAddr;
 use std::time::{Instant, Duration};
 use tokio::net::TcpStream;
-use tokio::timer::timeout::Timeout;
+use tokio::time;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::webpki::DNSNameRef;
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite::protocol::{Message, CloseFrame};
 use url::*;
-use websocket::{OwnedMessage, ClientBuilder, CloseData};
-use websocket::r#async::MessageCodec;
-use websocket::client::r#async::Framed;
 
-type RustlsWebsocket = Framed<TlsStream<TcpStream>, MessageCodec<OwnedMessage>>;
+type RustlsWebsocket = WebSocketStream<TlsStream<TcpStream>>;
 fn resolve_url_socket(url: &Url) -> Result<SocketAddr> {
-    let url_toks = url.to_socket_addrs().io_err("Could not resolve websocket domain.")?;
-    let url_toks: Vec<_> = url_toks.collect();
+    let url_toks = url.socket_addrs(|| Some(443))
+        .io_err("Could not resolve websocket domain.")?;
     url_toks.choose(&mut rand::thread_rng())
         .io_err("Could not resolve websocket domain.")
         .map(Clone::clone)
@@ -28,21 +28,20 @@ fn make_dns_ref(url: &Url) -> Result<DNSNameRef> {
     let host_str = url.host_str().bad_response("Invalid websocket hostname.")?;
     Ok(DNSNameRef::try_from_ascii_str(host_str).bad_response("Invalid websocket hostname.")?)
 }
-async fn connect_ws_rustls(ctx: &DiscordContext, mut url: Url) -> Result<RustlsWebsocket> {
+async fn connect_ws_rustls(ctx: &DiscordContext, url: Url) -> Result<RustlsWebsocket> {
     ensure!(url.scheme() == "wss", DiscordBadResponse, "Discord requested unencrypted websocket.");
-    if url.port().is_none() {
-        url.set_port(Some(443)).unwrap();
-    }
     let socket = resolve_url_socket(&url)?;
     let dns_ref = make_dns_ref(&url)?;
-    let tcp_conn = TcpStream::connect(&socket).compat().await
+    let tcp_conn = TcpStream::connect(&socket).await
         .io_err("Could not establish connection to websocket.")?;
-    let tls_conn = ctx.data.rustls_connector.connect(dns_ref, tcp_conn).compat().await
+    let tls_conn = ctx.data.rustls_connector.connect(dns_ref, tcp_conn).await
         .io_err("TLS error connecting to websocket.")?;
-    let client_builder = ClientBuilder::from_url(&url);
-    let ws_conn = client_builder.async_connect_on(tls_conn).compat().await
+    let request = Request::builder()
+        .uri(url.as_str())
+        .header("User-Agent", &*ctx.data.http_user_agent)
+        .body(()).unwrap();
+    let ws_conn = tokio_tungstenite::client_async(request, tls_conn).await
         .io_err("Websocket error connecting to websocket.")?;
-
     Ok(ws_conn.0)
 }
 
@@ -128,12 +127,12 @@ impl StreamDecoder {
 pub enum Response<T> {
     Packet(T),
     ParseError(Error),
-    Disconnected(Option<CloseData>),
+    Disconnected(Option<CloseFrame<'static>>),
     TimeoutEncountered,
 }
 
 pub struct WebsocketConnection {
-    websocket: Compat01As03Sink<RustlsWebsocket, OwnedMessage>,
+    websocket: RustlsWebsocket,
     decoder: StreamDecoder,
 }
 impl WebsocketConnection {
@@ -141,14 +140,14 @@ impl WebsocketConnection {
         ctx: &DiscordContext, url: Url, transport_compressed: bool,
     ) -> Result<WebsocketConnection> {
         Ok(WebsocketConnection {
-            websocket: Compat01As03Sink::new(connect_ws_rustls(ctx, url).await?),
+            websocket: connect_ws_rustls(ctx, url).await?,
             decoder: StreamDecoder::new(transport_compressed),
         })
     }
 
     pub async fn send(&mut self, data: impl Serialize) -> Result<()> {
         let json = serde_json::to_string(&data).unexpected()?;
-        self.websocket.send(OwnedMessage::Text(json)).await
+        self.websocket.send(Message::Text(json)).await
             .io_err("Could not send packet to websocket.")?;
         Ok(())
     }
@@ -173,35 +172,26 @@ impl WebsocketConnection {
                 None => return Ok(Response::TimeoutEncountered),
             };
 
-            let fut = self.websocket.next().map(|x| x.transpose());
-            let result = Compat01As03::new(Timeout::new(Compat::new(fut), remaining)).await;
-            let data = match result {
-                Ok(v) => v,
-                Err(e) if e.is_inner() => return Err(Error::new_with_cause(
-                    ErrorKind::IoError("Could not receive packet from websocket."),
-                    e.into_inner().unwrap().into(),
-                )),
-                Err(e) if e.is_elapsed() => return Ok(Response::TimeoutEncountered),
-                Err(_) => bail!("Unknown `Timeout` error."),
+            let data = match time::timeout(remaining.into(), self.websocket.next()).await {
+                Ok(Some(r)) => r.io_err("Error reading websocket packet.")?,
+                Ok(None) => return Ok(Response::Disconnected(None)),
+                Err(_) => return Ok(Response::TimeoutEncountered),
             };
             match data {
-                Some(OwnedMessage::Binary(binary)) => {
+                Message::Binary(binary) => {
                     let packet = unwrap_pkt!(self.decoder.decode_packet(&binary));
                     return Ok(Response::Packet(unwrap_pkt!(parse(packet))))
                 }
-                Some(OwnedMessage::Text(text)) => {
+                Message::Text(text) => {
                     if self.decoder.transport {
                         bail!(DiscordBadResponse, "Text received despite transport compression.");
                     }
                     return Ok(Response::Packet(unwrap_pkt!(parse(text.as_bytes()))))
                 }
-                Some(OwnedMessage::Ping(d)) => self.websocket.send(OwnedMessage::Pong(d)).await
+                Message::Ping(d) => self.websocket.send(Message::Pong(d)).await
                     .io_err("Could not send ping response to websocket.")?,
-                Some(OwnedMessage::Pong(_)) => { }
-                Some(OwnedMessage::Close(data)) =>
-                    return Ok(Response::Disconnected(data)),
-                None =>
-                    return Ok(Response::Disconnected(None)),
+                Message::Pong(_) => { }
+                Message::Close(data) => return Ok(Response::Disconnected(data)),
             }
         }
     }

@@ -6,7 +6,7 @@ use crate::http::{HttpConfig, RateLimits};
 use crate::model::types::{DiscordClientSecret, DiscordToken, Snowflake};
 use crate::serde::*;
 use derive_setters::*;
-use reqwest::r#async::{Client, ClientBuilder};
+use reqwest::{Client, ClientBuilder};
 use reqwest::header::*;
 use std::borrow::Cow;
 use std::sync::Arc;
