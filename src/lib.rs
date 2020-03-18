@@ -15,10 +15,11 @@ pub mod api;
 mod context;
 pub mod gateway;
 pub mod model;
+pub mod utils;
 mod ws;
 
 pub use context::*;
-pub use errors::{Error, ErrorKind};
+pub use errors::{Error, ErrorKind, Result};
 
 /// A set of reexports for more conveniently using the library.
 pub mod prelude {

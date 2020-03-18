@@ -25,8 +25,7 @@ mime_guess = "2.0.1"
 parking_lot = "0.10.0"
 rand = "0.7.2"
 tracing = { version = "0.1.10", features = ["log"] }
-# TODO: Wait for a release with this feature properly.
-tracing-futures = { version = "0.2.0", git = "https://github.com/tokio-rs/tracing.git", rev = "4c1a69d9e43a0c87dca60c649a2e949b3dca8b41" }
+tracing-futures = "0.2.0"
 
 # Serialization
 serde = { version = "1.0.90", features = ["rc", "derive", "unstable"] }

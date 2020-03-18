@@ -83,6 +83,7 @@ status_codes! {
     30013  TooManyChannels              => "Maximum number of guild channels reached (500)",
     30016  TooManyInvites               => "Maximum number of invites reached (1000)",
     40001  Unauthorized                 => "Unauthorized",
+    40006  TemporarilyDisabled          => "This feature has been temporarily disabled",
     50001  MissingAccess                => "Missing access",
     50002  InvalidAccountType           => "Invalid account type",
     50003  CannotExecuteInDMChannel     => "Cannot execute action on a DM channel",

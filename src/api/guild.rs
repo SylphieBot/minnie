@@ -4,6 +4,7 @@ use crate::model::channel::*;
 use crate::model::guild::*;
 use crate::model::types::*;
 use futures::future::try_join_all;
+use std::borrow::Cow;
 
 /// Performs operations relating to guilds.
 ///
@@ -21,7 +22,13 @@ impl <'a> GuildOps<'a> {
     }
 
     // TODO: Create Guilds
-    // TODO: Modify Guild
+
+    /// Modifies the guild's settings.
+    ///
+    /// For information on what properties can be set, see the methods of [`ModifyGuildFut`].
+    pub fn modify(self) -> ModifyGuildFut<'a> {
+        ModifyGuildFut::new(self)
+    }
 
     /// Deletes this guild.
     pub async fn delete(self) -> Result<()> {
@@ -98,7 +105,12 @@ impl <'a> MemberOps<'a> {
         self.raw.get_guild_member(self.guild_id, self.user_id).await
     }
 
-    // TODO: Modify Guild Member
+    /// Modifies the user's permissions, nickname and related settings.
+    ///
+    /// For information on what properties can be set, see the methods of [`ModifyGuildMemberFut`].
+    pub async fn modify(self) -> ModifyGuildMemberFut<'a> {
+        ModifyGuildMemberFut::new(self)
+    }
 
     /// Adds a role to this member.
     pub async fn add_role(self, role: impl Into<RoleId>) -> Result<()> {
@@ -154,3 +166,161 @@ impl <'a> MemberOps<'a> {
 
     routes_wrapper!(self, &mut self.raw);
 }
+
+fut_builder! {
+    ('a, modify_guild_mod, GuildOps, self)
+
+    /// A future for modifying settings of a guild.
+    ///
+    /// Instances can be obtained via [`GuildOps::modify`].
+    struct ModifyGuildFut {
+        params: ModifyGuildParams<'a>,
+    }
+    into_async!(|ops, data| -> Result<Guild> {
+        if let Some(img) = &data.params.icon {
+            img.check_is_anim_image()?;
+        }
+        if let Some(img) = &data.params.splash {
+            img.check_is_image()?;
+        }
+        if let Some(img) = &data.params.banner {
+            img.check_is_image()?;
+        }
+        ops.raw.modify_guild(ops.id, data.params).await
+    });
+
+    /// Sets the name of this guild.
+    pub fn name(&mut self, name: impl Into<Cow<'a, str>>) {
+        self.params.name = Some(name.into());
+    }
+
+    /// Sets the voice region this guild's voice channels use.
+    pub fn voice_region(&mut self, voice_region: impl Into<Cow<'a, str>>) {
+        self.params.region = Some(voice_region.into());
+    }
+
+    /// Sets the level of verification required for users to speak in this guild.
+    pub fn verification_level(&mut self, verification_level: VerificationLevel) {
+        self.params.verification_level = Some(verification_level);
+    }
+
+    /// Sets the default notification level for this guild.
+    pub fn notification_level(&mut self, notification_level: NotificationLevel) {
+        self.params.default_message_notifications = Some(notification_level);
+    }
+
+    /// Sets the strictness of the default explicit content filter on this guild.
+    pub fn content_filter_level(&mut self, content_filter_level: ExplicitContentFilterLevel) {
+        self.params.explicit_content_filter = Some(content_filter_level);
+    }
+
+    /// Sets the AFK voice channel.
+    pub fn afk_channel(&mut self, channel: impl Into<ChannelId>) {
+        self.params.afk_channel_id = Some(channel.into())
+    }
+
+    /// Sets the number of seconds a user must be idle in a voice channel after which they are
+    /// considered AFK, and will be automatically moved into the AFK channel.
+    pub fn afk_timeout(&mut self, timeout: u32) {
+        self.params.afk_timeout = Some(timeout);
+    }
+
+    /// Sets the icon of the guild.
+    pub fn icon(&mut self, icon: ImageData<'a>) {
+        self.params.icon = Some(icon);
+    }
+
+    /// Transfers ownership of the guild to another user. The bot must own the guild.
+    pub fn transfer_ownership(&mut self, id: impl Into<UserId>) {
+        self.params.owner_id = Some(id.into());
+    }
+
+    /// Sets the invite splash of the guild. The guild must have the feature enabled.
+    pub fn invite_splash(&mut self, splash: ImageData<'a>) {
+        self.params.splash = Some(splash.into());
+    }
+
+    /// Sets the banner of the guild. The guild must have the feature enabled.
+    pub fn banner(&mut self, banner: ImageData<'a>) {
+        self.params.banner = Some(banner.into());
+    }
+
+    /// Sets the system channel where Discord automatically posts user join, part and server
+    /// boost messages.
+    pub fn system_channel(&mut self, id: impl Into<ChannelId>) {
+        self.params.system_channel_id = Some(id.into());
+    }
+}
+
+fut_builder! {
+    ('a, modify_guild_member_mod, MemberOps, self)
+
+    /// A future for modifying a user's permissions in a guild.
+    ///
+    /// Instances can be obtained via [`MemberOps::modify`].
+    struct ModifyGuildMemberFut {
+        params: ModifyGuildMemberParams<'a>,
+    }
+    into_async!(|ops, data| -> Result<()> {
+        ops.raw.modify_guild_member(ops.guild_id, ops.user_id, data.params).await
+    });
+
+    /// Changes the user's nickname.
+    pub fn nick(&mut self, nick: impl Into<Cow<'a, str>>) {
+        self.params.nick = Some(nick.into());
+    }
+
+    /// Sets the user's roles.
+    ///
+    /// This is not recommended as there is the possibility of a race condition between your bot
+    /// and another bot, especially on events such as user join.
+    ///
+    /// See [`MemberOps::add_roles`] and [`MemberOps::remove_roles`] for a safer alternative.
+    ///
+    /// This API call should generally only be used for custom bots on servers with no other bots
+    /// that manage roles, or if absolutely required for performance reasons.
+    pub fn roles(&mut self, roles: impl Into<Cow<'a, [RoleId]>>) {
+        self.params.roles = Some(roles.into());
+    }
+
+    /// Mutes the user on voice channels.
+    pub fn mute_voice(&mut self) {
+        self.params.mute = Some(true);
+    }
+
+    /// Unmutes the user on voice channels.
+    pub fn unmute_voice(&mut self) {
+        self.params.mute = Some(false);
+    }
+
+    /// Sets whether the user is muted on voice channels.
+    pub fn voice_muted(&mut self, muted: bool) {
+        self.params.mute = Some(muted);
+    }
+
+    /// Deafens the user on voice channels.
+    pub fn deafen(&mut self) {
+        self.params.deaf = Some(true);
+    }
+
+    /// Undeafens the user on voice channels.
+    pub fn undeafen(&mut self) {
+        self.params.deaf = Some(false);
+    }
+
+    /// Sets whether the user is deafened on voice channels.
+    pub fn deafened(&mut self, deafened: bool) {
+        self.params.deaf = Some(deafened);
+    }
+
+    /// Moves the user to a given voice channel.
+    pub fn move_to(&mut self, channel: impl Into<ChannelId>) {
+        self.params.channel_id = Some(Some(channel.into()));
+    }
+
+    /// Disconnects the user from their voice channel.
+    pub fn disconnect_voice(&mut self) {
+        self.params.channel_id = Some(None);
+    }
+}
+

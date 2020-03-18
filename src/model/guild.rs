@@ -117,6 +117,7 @@ pub enum GuildFeature {
     Featurable,
     AnimatedIcon,
     Banner,
+    PublicDisabled,
     /// An unknown channel feature was enabled.
     #[serde(other)]
     Unknown,
@@ -222,6 +223,14 @@ impl PartialGuild {
 }
 into_id!(PartialGuild, GuildId, id);
 
+/// A system channel flag.
+#[derive(EnumSetType, Ord, PartialOrd, Debug, Hash)]
+#[non_exhaustive]
+pub enum SystemChannelFlag {
+    SuppressJoinNotifications = 0,
+    SuppressBoostNotifications = 1,
+}
+
 /// Information related to a role in a Discord guild.
 #[derive(Serialize, Deserialize, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash)]
 #[non_exhaustive]
@@ -230,6 +239,7 @@ pub struct Guild {
     pub name: String,
     pub icon: Option<String>,
     pub splash: Option<String>,
+    pub discovery_splash: Option<String>,
     #[serde(default, skip_serializing_if = "utils::if_false")]
     pub owner: bool,
     pub owner_id: UserId,
@@ -256,6 +266,8 @@ pub struct Guild {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub widget_channel_id: Option<ChannelId>,
     pub system_channel_id: Option<ChannelId>,
+    pub system_channel_flags: EnumSet<SystemChannelFlag>,
+    pub rules_channel_id: Option<ChannelId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joined_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "utils::if_false")]

@@ -27,6 +27,7 @@ pub use self::model::*;
 #[doc(inline)]
 pub use reqwest::{StatusCode as HttpStatusCode};
 pub use self::status::DiscordErrorCode;
+use reqwest::header::HeaderValue;
 
 const SENTINEL: Snowflake = Snowflake(0);
 
@@ -85,7 +86,7 @@ impl RateLimits {
 #[derive(Clone, Debug)]
 pub struct Routes<'a> {
     ctx: &'a DiscordContext,
-    client_token: Option<DiscordToken>,
+    client_token: HeaderValue,
     use_rate_limits: bool,
     reason: Option<String>,
 }
@@ -94,28 +95,27 @@ impl DiscordContext {
     pub fn raw(&self) -> Routes<'_> {
         Routes { 
             ctx: self,
-            client_token: None,
+            client_token: self.data.client_token.to_header_value(),
             use_rate_limits: true,
             reason: None,
         }
     }
 }
 impl <'a> Routes<'a> {
-    pub(crate) fn client_token_internal(&mut self, token: DiscordToken) {
-        self.use_rate_limits = token == self.ctx.data.client_token;
-        self.client_token = Some(token);
+    pub(crate) fn bearer_token_internal(&mut self, token: DiscordBearerToken) {
+        self.use_rate_limits = false;
+        self.client_token = token.to_header_value();
     }
     pub(crate) fn reason_internal(&mut self, reason: impl Into<String>) {
         self.reason = Some(reason.into());
     }
 
-    /// Overwrites the client token to use for the API call. Should generally be used for
-    /// making calls with Bearer tokens.
+    /// Makes an API call using a Bearer token.
     ///
     /// The context will not track remaining rate limits for other tokens other than the
     /// bot's own, although it will still wait for rate limits to end before retrying requests.
-    pub fn client_token(mut self, token: DiscordToken) -> Self {
-        self.client_token_internal(token);
+    pub fn bearer_token(mut self, token: DiscordBearerToken) -> Self {
+        self.bearer_token_internal(token);
         self
     }
 
@@ -128,15 +128,14 @@ impl <'a> Routes<'a> {
 
 macro_rules! routes_wrapper {
     ($ident_self:ident, $($routes_field:tt)*) => {
-        /// Overwrites the client token to use for the API call. Should generally be used for
-        /// making calls with Bearer tokens.
+        /// Makes an API call using a Bearer token.
         ///
         /// The context will not track remaining rate limits for other tokens other than the
         /// bot's own, although it will still wait for rate limits to end before retrying requests.
-        pub fn client_token(mut $ident_self, token: DiscordToken) -> Self {
+        pub fn bearer_token(mut $ident_self, token: DiscordBearerToken) -> Self {
             {
                 let ptr = $($routes_field)*;
-                ptr.client_token_internal(token);
+                ptr.bearer_token_internal(token);
             }
             $ident_self
         }

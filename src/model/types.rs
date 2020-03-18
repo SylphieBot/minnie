@@ -50,12 +50,87 @@ pub enum Permission {
     ManageEmojis = 30,
 }
 
-/// An type containing a bot or OAuth Bearer token.
+/// A type containing the bot application's client secret. Used for OAuth operations.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[repr(transparent)]
+pub struct DiscordClientSecret(Arc<str>);
+impl DiscordClientSecret {
+    /// Creates a new Discord secret.
+    pub fn new(tok: impl ToString) -> DiscordClientSecret {
+        DiscordClientSecret(tok.to_string().into())
+    }
+
+    /// Returns the client secret as a string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+impl From<String> for DiscordClientSecret {
+    fn from(s: String) -> Self {
+        DiscordClientSecret(s.into())
+    }
+}
+impl <'a> From<&'a String> for DiscordClientSecret {
+    fn from(s: &'a String) -> Self {
+        DiscordClientSecret(s.as_str().into())
+    }
+}
+impl <'a> From<&'a str> for DiscordClientSecret {
+    fn from(s: &'a str) -> Self {
+        DiscordClientSecret(s.into())
+    }
+}
+impl fmt::Debug for DiscordClientSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("<client secret omitted>")
+    }
+}
+impl From<DiscordClientSecret> for Arc<str> {
+    fn from(tok: DiscordClientSecret) -> Self {
+        tok.0
+    }
+}
+
+macro_rules! token_type {
+    ($name:ident) => {
+        impl $name {
+            /// Creates a new token and checks it for validity.
+            pub fn new(tok: impl ToString) -> Result<Self> {
+                Self::new_0(tok.to_string())
+            }
+
+            /// Converts the token to a header value.
+            pub fn to_header_value(&self) -> HeaderValue {
+                let mut val =
+                    HeaderValue::from_str(&self.0).expect("Could not encode token as header?");
+                val.set_sensitive(true);
+                val
+            }
+
+            /// Returns the token as a string.
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+        impl fmt::Debug for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("<discord token omitted>")
+            }
+        }
+        impl From<$name> for Arc<str> {
+            fn from(tok: $name) -> Self {
+                tok.0
+            }
+        }
+    }
+}
+
+/// A type containing a bot token.
 #[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct DiscordToken(Arc<str>);
 impl DiscordToken {
-    fn from_bot_string(tok: String) -> Result<DiscordToken> {
+    fn new_0(tok: String) -> Result<DiscordToken> {
         let has_bot = tok.starts_with("Bot ");
 
         let tok_data = if has_bot { &tok[4..] } else { &tok };
@@ -73,51 +148,21 @@ impl DiscordToken {
 
         Ok(DiscordToken(if has_bot { tok.into() } else { format!("Bot {}", tok).into() }))
     }
+}
+token_type!(DiscordToken);
 
-    /// Creates a new bot token, and checks it for validity.
-    pub fn new(tok: impl ToString) -> Result<DiscordToken> {
-        Self::from_bot_string(tok.to_string())
-    }
-
-    /// Creates a new OAuth Bearer token, and checks it for validity.
-    pub fn from_bearer(tok: impl ToString) -> Result<DiscordToken> {
-        let tok = tok.to_string();
-        ensure!(tok.starts_with("Bearer "), InvalidInput, "Invalid Bearer token.");
-        Ok(DiscordToken(tok.into()))
-    }
-
-    /// Checks whether this is a bot token.
-    pub fn is_bot(&self) -> bool {
-        self.0.starts_with("Bot ")
-    }
-
-    /// Checks whether this is a bearer token.
-    pub fn is_bearer(&self) -> bool {
-        self.0.starts_with("Bearer ")
-    }
-
-    /// Converts the token to a header value.
-    pub fn to_header_value(&self) -> HeaderValue {
-        let mut val = HeaderValue::from_str(&self.0).expect("Could not encode token as header?");
-        val.set_sensitive(true);
-        val
-    }
-
-    /// Returns the token as a string.
-    pub fn as_str(&self) -> &str {
-        &self.0
+/// A type containing an OAuth bearer token.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[repr(transparent)]
+pub struct DiscordBearerToken(Arc<str>);
+impl DiscordBearerToken {
+    fn new_0(tok: String) -> Result<DiscordBearerToken> {
+        let has_bearer = tok.starts_with("Bearer ");
+        let tok = if has_bearer { tok } else { format!("Bearer {}", tok) };
+        Ok(DiscordBearerToken(tok.into()))
     }
 }
-impl fmt::Debug for DiscordToken {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("<discord token omitted>")
-    }
-}
-impl From<DiscordToken> for Arc<str> {
-    fn from(tok: DiscordToken) -> Self {
-        tok.0.clone()
-    }
-}
+token_type!(DiscordBearerToken);
 
 /// A color used in Discord messages/etc.
 ///
@@ -312,7 +357,7 @@ impl Snowflake {
         };
         let ctr = COUNTER.fetch_add(1, Ordering::Relaxed);
 
-        Self::from_parts(time, hash_a, hash_b, ctr as u16)
+        Self::from_parts(time, hash_a, hash_b, ctr as u16 & 0xFFF)
     }
 
     /// Retrieves the raw timestamp component of this snowflake.

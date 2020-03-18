@@ -7,6 +7,7 @@ use crate::model::user::*;
 use enumset::*;
 use futures::future::try_join_all;
 use std::borrow::Cow;
+use std::fmt::{Display, Write};
 
 /// Performs operations relating to a Discord channel.
 ///
@@ -29,7 +30,7 @@ impl <'a> ChannelOps<'a> {
         self.raw.get_channel(self.id).await
     }
 
-    /// Modifies the channel's setting, such as its name or topic.
+    /// Modifies the channel's settings, such as its name or topic.
     ///
     /// For information on what properties can be set, see the methods of [`ModifyChannelFut`].
     ///
@@ -40,7 +41,7 @@ impl <'a> ChannelOps<'a> {
     /// # use minnie::Result;
     /// # use minnie::model::types::ChannelId;
     /// async fn set_channel_name(ctx: DiscordContext, id: ChannelId) -> Result<()> {
-    ///     ctx.channel(id).edit().name("foo").topic("bar").await?;
+    ///     ctx.channel(id).modify().name("foo").topic("bar").await?;
     ///     Ok(())
     /// }
     /// ```
@@ -375,6 +376,21 @@ fut_builder! {
     /// Sets the content of the post.
     pub fn content(&mut self, content: impl Into<Cow<'a, str>>) {
         self.params.content = Some(content.into());
+    }
+
+    /// Appends content to this post.
+    ///
+    /// If the post is currently empty, the post will be initialized with empty content.
+    pub fn append(&mut self, content: impl Display) {
+        if self.params.content.is_none() {
+            self.params.content = Some(String::new().into());
+        }
+        write!(self.params.content.as_mut().unwrap().to_mut(), "{}", content).unwrap();
+    }
+
+    /// Appends content to this post, sanitizing unwanted user input.
+    pub fn append_user(&mut self, content: impl ToString) {
+        self.append(crate::utils::sanitize_user_input(&content.to_string()));
     }
 
     /// Sets the nonce for this post.

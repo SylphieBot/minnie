@@ -151,6 +151,23 @@ pub mod utils {
         }
     }
 
+    pub mod option_option {
+        use super::*;
+        pub fn serialize<S: Serializer>(
+            t: &Option<Option<impl Serialize>>, s: S,
+        ) -> Result<S::Ok, S::Error> {
+            match t {
+                Some(t) => t.serialize(s),
+                None => Err(S::Error::custom("option_option not used with skip_serializing_if")),
+            }
+        }
+        pub fn deserialize<'de, R: Deserialize<'de>, D: Deserializer<'de>>(
+            d: D,
+        ) -> Result<Option<Option<R>>, D::Error> {
+            Ok(Some(Option::<R>::deserialize(d)?))
+        }
+    }
+
     macro_rules! option_wrapper {
         ($name:ident, $orig:literal, $ty:ty) => {
             pub mod $name {

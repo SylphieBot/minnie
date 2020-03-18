@@ -119,6 +119,9 @@ pub struct GuildMemberUpdateEvent {
     pub user: User,
     /// The user's new nickname.
     pub nick: Option<String>,
+    /// When the user started boosting the server, if ever.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub premium_since: Option<DateTime<Utc>>,
 }
 
 /// A `Guild Member Chunk` event.

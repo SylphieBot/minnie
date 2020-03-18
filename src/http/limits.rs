@@ -1,6 +1,6 @@
 use crate::errors::*;
 use crate::http::{SENTINEL, DiscordError, DiscordErrorCode, HttpConfig};
-use crate::model::types::{Snowflake, DiscordToken};
+use crate::model::types::Snowflake;
 use crate::serde::*;
 use fnv::FnvHashMap;
 use futures::compat::*;
@@ -399,15 +399,14 @@ enum ResponseStatus {
 async fn check_response<'a>(
     request: RequestBuilder,
     reason: &'a Option<String>,
-    client_token: &'a Option<DiscordToken>,
+    client_token: &'a HeaderValue,
     call_name: &'static str,
 ) -> Result<ResponseStatus> {
-    let mut request = request.header("X-RateLimit-Precision", "millisecond");
+    let mut request = request
+        .header("X-RateLimit-Precision", "millisecond")
+        .header("Authorization", client_token);
     if let Some(reason) = &reason {
         request = request.header("X-Audit-Log-Reason", reason);
-    }
-    if let Some(client_token) = &client_token {
-        request = request.header("Authorization", client_token.to_header_value());
     }
     let mut response = request.send().compat().await.io_err("Failed to make API request.")?;
     if response.status().is_success() {
@@ -502,7 +501,7 @@ impl RateLimitRoute {
         use_rate_limits: bool,
         make_request: &'a (dyn Fn() -> Result<RequestBuilder> + Send + Sync),
         reason: Option<String>,
-        client_token: Option<DiscordToken>,
+        client_token: HeaderValue,
         id: Snowflake,
         call_name: &'static str,
     ) -> Result<Response> {

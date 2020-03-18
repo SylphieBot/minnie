@@ -173,6 +173,21 @@ impl <'a> ImageData<'a> {
     pub fn data(&self) -> Vec<u8> {
         base64::decode(self.base64_data()).expect("Invalid base64 data!")
     }
+
+    pub(crate) fn check_is_image(&self) -> Result<()> {
+        match self.format {
+            ImageFormat::Png | ImageFormat::Jpeg => { }
+            _ => bail!(InvalidInput, "Image must be PNG or JPEG."),
+        }
+        Ok(())
+    }
+    pub(crate) fn check_is_anim_image(&self) -> Result<()> {
+        match self.format {
+            ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Gif => { }
+            _ => bail!(InvalidInput, "Image must be GIF, PNG or JPEG."),
+        }
+        Ok(())
+    }
 }
 impl <'a> fmt::Display for ImageData<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -271,6 +286,7 @@ pub struct ModifyChannelParams<'a> {
     pub permission_overwrites: Option<Cow<'a, [PermissionOverwrite]>>,
     /// The category this channel belongs to.
     #[setters(into)]
+    #[serde(with = "utils::option_option", skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<Option<ChannelId>>,
 }
 new_from_default!(ModifyChannelParams);
@@ -757,8 +773,9 @@ pub struct ModifyGuildMemberParams<'a> {
     pub mute: Option<bool>,
     /// Whether to deafen the user in voice channels.
     pub deaf: Option<bool>,
-    /// Move the uesr to a different voice channel.
+    /// Move the user to a different voice channel.
     #[setters(into)]
+    #[serde(with = "utils::option_option", skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<Option<ChannelId>>,
 }
 new_from_default!(ModifyGuildMemberParams);

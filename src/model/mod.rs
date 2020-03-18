@@ -2,7 +2,8 @@
 
 // TODO: Add documentation for individual fields in the model.
 // TODO: Handle malformed presence updates only for fields that might be incorrect.
-// TODO: Add better formats for image-related operations.
+// TODO: Add better methods for retrieving/etc image data.
+// TODO: Split bearer and bot token into two separate types.
 
 macro_rules! into_id {
     ($ty:ty, $field_ty:ty, $field:ident) => {
