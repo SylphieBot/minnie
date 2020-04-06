@@ -644,4 +644,9 @@ impl GatewayIntent {
             _ => false,
         }
     }
+
+    /// Returns a set of all privileged intents.
+    pub fn privileged() -> EnumSet<GatewayIntent> {
+        GatewayIntent::GuildMembers | GatewayIntent::GuildPresences
+    }
 }

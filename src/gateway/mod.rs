@@ -258,9 +258,9 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
 
     /// Returns the intents this gateway handler listens to.
     ///
-    /// By default, the gateway will attempt to subscribe to all events possible.
+    /// By default, the gateway will attempt to subscribe to all non-privileged events possible.
     fn intents(&self) -> EnumSet<GatewayIntent> {
-        EnumSet::all()
+        EnumSet::all() - GatewayIntent::privileged()
     }
 }
 
