@@ -11,7 +11,6 @@ use crate::model::types::*;
 use crate::ws::*;
 use crate::ws::Response::*;
 use crossbeam_channel::{self, Receiver, Sender};
-use enumset::EnumSet;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

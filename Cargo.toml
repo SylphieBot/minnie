@@ -17,7 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 crossbeam-channel = "0.4"
 derivative = "2.0.2"
 derive_setters = "0.1.0"
-enumset = { version = "0.4.0", features = ["serde"] }
+enumset = { version = "1.0.0", features = ["serde"] }
 failure = "0.1.5"
 fnv = "1.0.3"
 lazy_static = "1.4.0"
