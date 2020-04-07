@@ -484,7 +484,7 @@ pub struct Message {
     #[serde(rename = "type")]
     pub message_type: MessageType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub activity: Option<MessageActivityType>,
+    pub activity: Option<MessageActivity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application: Option<MessageApplication>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
