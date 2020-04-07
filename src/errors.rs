@@ -81,6 +81,12 @@ pub enum ErrorKind {
     /// for a change in Discord's protocol.
     #[fail(display = "Discord returned bad response: {}", _0)]
     DiscordBadResponse(&'static str),
+    /// Discord returned an unexpected or invalid response.
+    ///
+    /// This may happen if Discord is experiencing issues or the library hasn't been updated
+    /// for a change in Discord's protocol.
+    #[fail(display = "Discord returned unparsable packet: {:?}", _0)]
+    DiscordUnparsablePacket(String),
     /// Discord returned an error status code.
     #[fail(display = "{} failed with {} ({})", _0, _1, _2)]
     RequestFailed(&'static str, HttpStatusCode, DiscordError),

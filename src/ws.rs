@@ -156,15 +156,16 @@ impl WebsocketConnection {
     ) -> Result<Response<T>> {
         let timeout_end = Instant::now() + timeout;
         macro_rules! unwrap_pkt {
-            ($e:expr) => {
-                match $e {
+            ($e:expr) => {{
+                let s = $e;
+                match parse(s) {
                     Ok(v) => v,
                     Err(e) => return Ok(Response::ParseError(Error::new_with_cause(
-                        ErrorKind::DiscordBadResponse("Could not parse packet."),
+                        ErrorKind::DiscordUnparsablePacket(String::from_utf8_lossy(s).to_string()),
                         e,
                     ))),
                 }
-            };
+            }};
         }
         loop {
             let remaining = match timeout_end.checked_duration_since(Instant::now()) {
@@ -179,14 +180,20 @@ impl WebsocketConnection {
             };
             match data {
                 Message::Binary(binary) => {
-                    let packet = unwrap_pkt!(self.decoder.decode_packet(&binary));
-                    return Ok(Response::Packet(unwrap_pkt!(parse(packet))))
+                    let packet = match self.decoder.decode_packet(&binary) {
+                        Ok(v) => v,
+                        Err(e) => return Ok(Response::ParseError(Error::new_with_cause(
+                            ErrorKind::DiscordBadResponse("Could not decompress packet."),
+                            e
+                        ))),
+                    };
+                    return Ok(Response::Packet(unwrap_pkt!(packet)))
                 }
                 Message::Text(text) => {
                     if self.decoder.transport {
                         bail!(DiscordBadResponse, "Text received despite transport compression.");
                     }
-                    return Ok(Response::Packet(unwrap_pkt!(parse(text.as_bytes()))))
+                    return Ok(Response::Packet(unwrap_pkt!(text.as_bytes())))
                 }
                 Message::Ping(d) => self.websocket.send(Message::Pong(d)).await
                     .io_err("Could not send ping response to websocket.")?,

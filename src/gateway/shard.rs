@@ -275,6 +275,10 @@ async fn running_shard(
                     }
                 }
             }
+            Ok(Packet(GatewayPacket::Reconnect)) => {
+                info!("Discord requested shard #{} to reconnect.", shard.id);
+                return ShardStatus::Reconnect
+            },
             Ok(Packet(GatewayPacket::HeartbeatAck)) => heartbeat_ack = true,
             Ok(Packet(GatewayPacket::UnknownOpcode(v))) =>
                 emit_err!(GatewayError::UnknownOpcode(v), true),
