@@ -123,6 +123,8 @@ pub enum UserFlags {
     TeamUser = 10,
     System = 12,
     BugHunterLevel2 = 14,
+    VerifiedBot = 16,
+    VerifiedBotDev = 17,
 }
 
 /// The kind of Nitro subscription a user has.

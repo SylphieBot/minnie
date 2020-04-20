@@ -536,8 +536,8 @@ impl GatewayEventType {
     pub fn intent(&self) -> Option<EnumSet<GatewayIntent>> {
         use GatewayEventType::*;
         match self {
-            GuildCreate | GuildDelete | GuildRoleCreate | GuildRoleUpdate | GuildRoleDelete |
-            ChannelUpdate | ChannelDelete | ChannelPinsUpdate
+            GuildCreate | GuildUpdate | GuildDelete | GuildRoleCreate | GuildRoleUpdate |
+            GuildRoleDelete | ChannelUpdate | ChannelDelete | ChannelPinsUpdate
                 => Some(GatewayIntent::Guilds.into()),
             GuildMemberAdd | GuildMemberUpdate | GuildMemberRemove
                 => Some(GatewayIntent::GuildMembers.into()),
@@ -555,7 +555,7 @@ impl GatewayEventType {
                 => Some(GatewayIntent::GuildVoiceStates.into()),
             PresenceUpdate
                 => Some(GatewayIntent::GuildPresences.into()),
-            MessageCreate | MessageUpdate | MessageDelete
+            MessageCreate | MessageUpdate | MessageDelete | MessageDeleteBulk
                 => Some(GatewayIntent::GuildMessages |
                         GatewayIntent::DirectMessages),
             MessageReactionAdd | MessageReactionRemove |
