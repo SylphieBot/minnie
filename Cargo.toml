@@ -12,18 +12,19 @@ lto = true
 nightly = []
 
 [dependencies]
+backtrace = "0.3.48"
 base64 = "0.12.0"
 chrono = { version = "0.4", features = ["serde"] }
 crossbeam-channel = "0.4"
 derivative = "2.0.2"
 derive_setters = "0.1.0"
 enumset = { version = "1.0.0", features = ["serde"] }
-failure = "0.1.5"
 fnv = "1.0.3"
 lazy_static = "1.4.0"
 mime_guess = "2.0.1"
 parking_lot = "0.10.0"
 rand = "0.7.2"
+thiserror = "1.0.19"
 tracing = { version = "0.1.10", features = ["log"] }
 tracing-futures = "0.2.0"
 

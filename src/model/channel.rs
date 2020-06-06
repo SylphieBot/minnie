@@ -9,7 +9,6 @@ use crate::serde::*;
 use derive_setters::*;
 use std::fmt;
 use std::time::Duration;
-use failure::_core::fmt::Formatter;
 
 /// The type of an channel.
 #[derive(Serialize_repr, Deserialize_repr)]
@@ -91,7 +90,7 @@ impl From<RoleId> for PermissionOverwriteId {
     }
 }
 impl fmt::Display for PermissionOverwriteId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PermissionOverwriteId::Member(id) => write!(f, "user:{}", id),
             PermissionOverwriteId::Role(id) => write!(f, "role:{}", id),

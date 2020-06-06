@@ -6,10 +6,10 @@ use crate::model::event::*;
 use crate::model::types::*;
 use derive_setters::*;
 use enumset::EnumSet;
-use failure::Fail;
 use fnv::FnvHashMap;
 use parking_lot::{Mutex, RwLock};
 use rand::Rng;
+use std::error::{Error as StdError};
 use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Duration;
@@ -126,16 +126,23 @@ impl <T: GatewayHandler> GatewayError<T> {
         }
     }
 
-    /// Returns a [`Fail`] for this gateway error, or `None` if it is not one.
-    pub fn as_fail(&self) -> Option<&dyn Fail> {
-        if let Some(x) = self.as_error() {
-            Some(x)
+    /// Returns an `T::Error` for this gateway error, or `None` if it is not one.
+    pub fn as_user_error(&self) -> Option<&T::Error> {
+        match self {
+            GatewayError::EventHandlingFailed(err) =>
+                Some(err),
+            _ => None,
+        }
+    }
+
+    /// Returns a standard library error for this gateway error, or `None` if it is not one.
+    pub fn as_std_error(&self) -> Option<&(dyn StdError + 'static)> {
+        if let Some(err) = self.as_error() {
+            Some(err)
+        } else if let Some(err) = self.as_user_error() {
+            Some(err)
         } else {
-            match self {
-                GatewayError::EventHandlingFailed(err) =>
-                    Some(err),
-                _ => None,
-            }
+            None
         }
     }
 }
@@ -177,7 +184,7 @@ pub struct GatewayContext {
 /// into the futures handler.
 pub trait GatewayHandler: Sized + Send + Sync + 'static {
     /// The type of error used by this handler.
-    type Error: Fail + Sized;
+    type Error: StdError + Sized + Send + 'static;
 
     /// Handle events received by the gateway.
     fn on_event(
@@ -194,18 +201,17 @@ pub trait GatewayHandler: Sized + Send + Sync + 'static {
         if let GatewayError::UnexpectedPacket(pkt) = &err {
             write!(buf, ": {:?}", pkt).unwrap();
         }
-        if let Some(fail) = err.as_fail() {
+        if let Some(fail) = err.as_std_error() {
             write!(buf, ": {}", fail).unwrap();
-            let mut cause = fail.cause();
+            let mut cause = fail.source();
             while let Some(c) = cause {
                 write!(buf, "\nCaused by: {}", c).unwrap();
-                cause = c.cause();
+                cause = c.source();
             }
-            if let Some(bt) = find_backtrace(fail) {
-                let str = bt.to_string();
-                if !str.trim().is_empty() {
-                    write!(buf, "\nBacktrace:\n{}", bt).unwrap();
-                }
+        }
+        if let Some(fail) = err.as_error() {
+            if let Some(bt) = fail.backtrace() {
+                write!(buf, "\nBacktrace:\n{:?}", bt).unwrap();
             }
         }
         error!("{}", buf);

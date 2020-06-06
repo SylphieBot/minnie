@@ -1,7 +1,7 @@
 //! Defines the error types used by Minnie.
 
+use backtrace::Backtrace;
 use crate::http::{DiscordError, HttpStatusCode};
-use failure::*;
 use flate2::DecompressError;
 use futures::FutureExt;
 use reqwest::{Error as ReqwestError};
@@ -10,33 +10,25 @@ use serde_json::{Error as SerdeJsonError};
 use std::any::Any;
 use std::borrow::Cow;
 use std::convert::Infallible;
+use std::error::{Error as StdError};
 use std::fmt;
 use std::future::Future;
 use std::io::{Error as IoError};
 use std::num::{ParseIntError, ParseFloatError};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::str::ParseBoolError;
+use thiserror::*;
 use tokio_tungstenite::tungstenite::{Error as TungsteniteError};
 use webpki::InvalidDNSNameError;
 
 pub use std::result::{Result as StdResult};
 
-
 macro_rules! lib_error {
     ($($ty:ident),* $(,)?) => {
-        #[derive(Fail, Debug)]
+        #[derive(Error, Debug)]
         pub enum LibError {$(
-            #[fail(display = "{}", _0)]
-            $ty(#[cause] $ty),
+            #[error("{0}")] $ty(#[from] #[source] $ty),
         )*}
-        $(
-            impl From<$ty> for LibError {
-                #[inline(never)] #[cold]
-                fn from(err: $ty) -> Self {
-                    LibError::$ty(err)
-                }
-            }
-        )*
     }
 }
 lib_error! {
@@ -50,45 +42,45 @@ impl From<Infallible> for LibError {
 }
 
 /// Represents the kind of error that occurred.
-#[derive(Fail, Debug)]
+#[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum ErrorKind {
     /// Invalid input was provided to the library.
     ///
     /// This generally indicates a bug in an user of the library.
-    #[fail(display = "Invalid API usage: {}", _0)]
+    #[error("Invalid API usage: {0}")]
     InvalidInput(&'static str),
     /// An IO error occurred.
     ///
     /// This generally occurs because Discord is experiencing issues.
-    #[fail(display = "IO Error: {}", _0)]
+    #[error("IO Error: {0}")]
     IoError(&'static str),
     /// An internal error has occurred.
     ///
     /// This generally indicates a bug in the library.
-    #[fail(display = "Internal error: {}", _0)]
+    #[error("Internal error: {0}")]
     InternalError(&'static str),
     /// Used to convey information about a panic to the gateway or voice event receivers.
     ///
     /// This should not be returned from other methods in normal circumstances, and panics in
     /// most library code will directly propagate to the caller.
-    #[fail(display = "{}", _0)]
+    #[error("{0}")]
     Panicked(Cow<'static, str>),
 
     /// Discord returned an unexpected or invalid response.
     ///
     /// This may happen if Discord is experiencing issues or the library hasn't been updated
     /// for a change in Discord's protocol.
-    #[fail(display = "Discord returned bad response: {}", _0)]
+    #[error("Discord returned bad response: {0}")]
     DiscordBadResponse(&'static str),
     /// Discord returned an unexpected or invalid response.
     ///
     /// This may happen if Discord is experiencing issues or the library hasn't been updated
     /// for a change in Discord's protocol.
-    #[fail(display = "Discord returned unparsable packet: {:?}", _0)]
+    #[error("Discord returned unparsable packet: {0:?}")]
     DiscordUnparsablePacket(String),
     /// Discord returned an error status code.
-    #[fail(display = "{} failed with {} ({})", _0, _1, _2)]
+    #[error("{0} failed with {1} ({2})")]
     RequestFailed(&'static str, HttpStatusCode, DiscordError),
 }
 
@@ -96,17 +88,6 @@ struct ErrorData {
     kind: ErrorKind,
     backtrace: Option<Backtrace>,
     cause: Option<LibError>,
-}
-
-pub fn find_backtrace(fail: &dyn Fail) -> Option<&Backtrace> {
-    let mut current: Option<&dyn Fail> = Some(&*fail);
-    while let Some(x) = current {
-        if let Some(bt) = x.backtrace() {
-            return Some(bt)
-        }
-        current = x.cause();
-    }
-    None
 }
 
 /// An error type used throughout the library.
@@ -169,9 +150,9 @@ impl Error {
         &self.0.kind
     }
 
-    /// Finds the first backtrace in the cause chain.
-    pub fn find_backtrace(&self) -> Option<&Backtrace> {
-        find_backtrace(self)
+    /// Returns the backtrace, if one was recorded.
+    pub fn backtrace(&self) -> Option<&Backtrace> {
+        self.0.backtrace.as_ref()
     }
 
     /// Returns `true` if this error was likely due to a bug in either user code or Minnie.
@@ -199,17 +180,9 @@ impl Error {
         }
     }
 }
-impl Fail for Error {
-    fn name(&self) -> Option<&str> {
-        Some("minnie::errors::Error")
-    }
-
-    fn cause(&self) -> Option<&dyn Fail> {
-        self.0.cause.as_ref().and_then(|x| x.cause())
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.0.backtrace.as_ref()
+impl StdError for Error {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.0.cause.as_ref().and_then(|x| x.source())
     }
 }
 impl fmt::Debug for Error {
