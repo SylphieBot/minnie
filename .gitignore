@@ -1,5 +1,8 @@
-/target
+# Cargo/IDE related files
 /.idea
 /*.iml
+/target
 /Cargo.lock
-/examples/*
+
+# Private development files
+/discord_tok
