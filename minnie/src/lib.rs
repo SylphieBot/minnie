@@ -12,7 +12,6 @@
 pub mod api;
 mod context;
 pub mod gateway;
-pub mod utils;
 mod ws;
 
 #[doc(inline)] pub use context::*;
