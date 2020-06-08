@@ -3,7 +3,7 @@
 use crate::context::DiscordContext;
 use derive_setters::*;
 use enumset::EnumSet;
-use fnv::FnvHashMap;
+use fxhash::FxHashMap;
 use minnie_errors::*;
 use minnie_model::event::*;
 use minnie_model::gateway::*;
@@ -360,7 +360,7 @@ impl Default for GatewayConfig {
 struct CurrentGateway {
     shared: Arc<shard::GatewayState>,
     shards: Vec<Arc<shard::ShardState>>,
-    shard_id_map: FnvHashMap<ShardId, usize>,
+    shard_id_map: FxHashMap<ShardId, usize>,
 }
 impl CurrentGateway {
     async fn wait_shutdown(&self) {
@@ -413,7 +413,7 @@ impl GatewayController {
         let gateway = Arc::new(shard::GatewayState::new(&endpoint.url, self.shared.clone()));
 
         let mut shards = Vec::new();
-        let mut shard_id_map = FnvHashMap::default();
+        let mut shard_id_map = FxHashMap::default();
         for id in 0..shard_count {
             if config.shard_filter.accepts_shard(id) {
                 let id = ShardId(id, shard_count);

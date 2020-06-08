@@ -1,5 +1,5 @@
 use crate::http::{SENTINEL, HttpConfig};
-use fnv::FnvHashMap;
+use fxhash::FxHashMap;
 use minnie_errors::*;
 use minnie_model::http::RateLimited;
 use minnie_model::types::Snowflake;
@@ -184,7 +184,7 @@ struct BucketLimits {
     /// The limit stored for routes with no parameters.
     only_limit: RateLimit,
     /// The main limit stores.
-    limits: FnvHashMap<Snowflake, RateLimit>,
+    limits: FxHashMap<Snowflake, RateLimit>,
 }
 impl BucketLimits {
     fn get(&mut self, id: Snowflake, config: &HttpConfig) -> &mut RateLimit {
@@ -222,7 +222,7 @@ impl Bucket {
             config: config.clone(),
             limits: BucketLimits {
                 only_limit: RateLimit::new(config),
-                limits: FnvHashMap::default(),
+                limits: FxHashMap::default(),
             },
             estimated_limits: None,
         }
@@ -423,13 +423,13 @@ async fn check_response<'a>(
 #[derive(Debug)]
 pub struct RateLimitStore {
     config: HttpConfig,
-    buckets: FnvHashMap<String, Arc<Mutex<Bucket>>>,
+    buckets: FxHashMap<String, Arc<Mutex<Bucket>>>,
 }
 impl RateLimitStore {
     pub fn new(config: HttpConfig) -> Self {
         RateLimitStore {
             config,
-            buckets: FnvHashMap::default(),
+            buckets: FxHashMap::default(),
         }
     }
 
