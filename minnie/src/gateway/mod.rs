@@ -19,6 +19,7 @@ use tokio::runtime::Handle;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 
 mod shard;
+pub use minnie_model::gateway::{GuildMembersRequest, PresenceUpdate};
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?
