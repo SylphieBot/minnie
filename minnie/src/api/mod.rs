@@ -4,10 +4,7 @@
 //! methods on [`DiscordContext`].
 
 use crate::context::*;
-use crate::model::channel::{Channel, PartialChannel};
-use crate::model::guild::{Guild, PartialGuild};
-use crate::model::message::Message;
-use crate::model::types::*;
+use minnie_model::types::*;
 
 // TODO: Create iterators based on the various get_* functions.
 // TODO: Consider various API extensions based on full message/user/etc objects.
@@ -193,35 +190,5 @@ impl DiscordContext {
     /// Performs operations relating to a member.
     pub fn member(&self, guild: impl Into<GuildId>, member: impl Into<UserId>) -> MemberOps<'_> {
         MemberOps { guild_id: guild.into(), user_id: member.into(), raw: self.raw() }
-    }
-}
-impl Channel {
-    /// Performs operations on this channel.
-    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> ChannelOps<'a> {
-        ChannelOps { id: self.id, raw: ctx.raw() }
-    }
-}
-impl Guild {
-    /// Performs operations on this guild.
-    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> GuildOps<'a> {
-        GuildOps { id: self.id, raw: ctx.raw() }
-    }
-}
-impl PartialChannel {
-    /// Performs operations on this channel.
-    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> ChannelOps<'a> {
-        ChannelOps { id: self.id, raw: ctx.raw() }
-    }
-}
-impl PartialGuild {
-    /// Performs operations on this guild.
-    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> GuildOps<'a> {
-        GuildOps { id: self.id, raw: ctx.raw() }
-    }
-}
-impl Message {
-    /// Performs operations on this message.
-    pub fn ops<'a>(&self, ctx: &'a DiscordContext) -> MessageOps<'a> {
-        MessageOps { channel_id: self.channel_id, message_id: self.id, raw: ctx.raw() }
     }
 }

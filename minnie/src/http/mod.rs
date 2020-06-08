@@ -1,17 +1,18 @@
 //! A module for making raw requests to Discord's API.
 
 use crate::context::DiscordContext;
-use crate::errors::*;
-use crate::model::channel::*;
-use crate::model::guild::*;
-use crate::model::message::*;
-use crate::model::types::*;
-use crate::model::user::*;
-use crate::serde::*;
 use derive_setters::*;
+use enumset::*;
+use minnie_errors::*;
+use minnie_model::channel::*;
+use minnie_model::guild::*;
+use minnie_model::message::*;
+use minnie_model::types::*;
+use minnie_model::user::*;
 use parking_lot::Mutex;
 use reqwest::header::HeaderValue;
-use reqwest::multipart::Form;
+use reqwest::multipart::{Form, Part};
+use serde::*;
 use serde_json;
 use std::error::{Error as StdError};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -19,10 +20,9 @@ use std::time::Duration;
 use tracing_futures::*;
 
 mod limits;
-mod model;
 
 use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
-pub use self::model::*;
+pub use minnie_model::http::*;
 
 const SENTINEL: Snowflake = Snowflake(0);
 
@@ -281,10 +281,10 @@ routes! {
         full_request: |r| {
             let mut form = Form::new();
             if files.len() == 1 {
-                form = form.part("file", files[0].to_part()?);
+                form = form.part("file", file_to_part(&files[0])?);
             } else if !files.is_empty() {
                 for (i, f) in files.iter().enumerate() {
-                    form = form.part(format!("file{}", i), f.to_part()?);
+                    form = form.part(format!("file{}", i), file_to_part(f)?);
                 }
             }
             form = form.text("payload_json", serde_json::to_string(&params).unexpected()?);
@@ -333,7 +333,7 @@ routes! {
         let params = EditChannelPermissionsJsonParams {
             allow: params.allow,
             deny: params.deny,
-            overwrite_type: over.raw_type(),
+            overwrite_type: over.overwrite_type(),
         };
         let id: Snowflake = over.into();
         request: post("/channels/{}/permissions/{}", ch.0, id).json(&params),
@@ -581,6 +581,14 @@ routes! {
     // TODO: Webhooks
 }
 
+fn file_to_part(file: &CreateMessageFile) -> Result<Part> {
+    Ok(Part::bytes(file.contents().to_vec())
+        .mime_str(file.mime_type())
+        .expect("`Mime` contains invalid media type?")
+        .file_name(file.file_name().to_string()))
+}
+
+
 #[derive(Serialize)]
 struct BulkDeleteMessagesJsonParams<'a> {
     messages: &'a [MessageId],
@@ -591,7 +599,7 @@ struct EditChannelPermissionsJsonParams {
     allow: EnumSet<Permission>,
     deny: EnumSet<Permission>,
     #[serde(rename = "type")]
-    overwrite_type: RawPermissionOverwriteType,
+    overwrite_type: PermissionOverwriteType,
 }
 
 #[derive(Serialize)]

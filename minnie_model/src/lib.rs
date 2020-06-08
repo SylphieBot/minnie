@@ -1,9 +1,12 @@
 //! Types used to interact with the Discord API.
+//!
+//! This is reexposed in `minnie`, and that should be preferred over this crate.
 
 // TODO: Add documentation for individual fields in the model.
 // TODO: Handle malformed presence updates only for fields that might be incorrect.
 // TODO: Add better methods for retrieving/etc image data.
-// TODO: Split bearer and bot token into two separate types.
+
+#[macro_use] mod serde;
 
 macro_rules! into_id {
     ($ty:ty, $field_ty:ty, $field:ident) => {
@@ -22,7 +25,9 @@ macro_rules! into_id {
 
 pub mod channel;
 pub mod event;
+pub mod gateway;
 pub mod guild;
+pub mod http;
 pub mod message;
 pub mod types;
 pub mod user;

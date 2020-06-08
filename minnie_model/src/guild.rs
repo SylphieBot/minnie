@@ -1,10 +1,10 @@
 //! Types related to Discord guilds.
 
 use chrono::{DateTime, Utc};
-use crate::model::channel::*;
-use crate::model::types::*;
-use crate::model::user::*;
+use crate::channel::*;
 use crate::serde::*;
+use crate::types::*;
+use crate::user::*;
 use std::time::Duration;
 
 /// Represents an unavailable guild.

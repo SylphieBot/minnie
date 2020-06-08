@@ -4,24 +4,25 @@
 // TODO: Consider adding APIs to allow creating Cow<'a, [T]> from iterators.
 
 #[macro_use] extern crate derivative;
+#[macro_use] extern crate minnie_errors;
 #[macro_use] extern crate tracing;
 
-#[macro_use] pub extern crate minnie_errors as errors;
-#[macro_use] mod serde;
 #[macro_use] pub mod http;
 
 pub mod api;
 mod context;
 pub mod gateway;
-pub mod model;
 pub mod utils;
 mod ws;
 
-pub use context::*;
-pub use errors::{Error, ErrorKind, Result};
+#[doc(inline)] pub use context::*;
+#[doc(inline)] pub use minnie_errors::{Error, ErrorKind, Result};
+
+/// Types used to interact with the Discord API.
+#[doc(inline)] pub extern crate minnie_model as model;
 
 /// A set of reexports for more conveniently using the library.
 pub mod prelude {
     #[doc(no_inline)] pub use crate::context::DiscordContext;
-    pub use crate::model::types::DiscordToken;
+    pub use minnie_model::types::DiscordToken;
 }

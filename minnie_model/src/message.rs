@@ -1,13 +1,11 @@
 //! Types related to Discord messages.
 
 use chrono::{DateTime, Utc};
-use crate::errors::*;
-use crate::model::channel::*;
-use crate::model::types::*;
-use crate::model::guild::*;
-use crate::model::user::*;
+use crate::channel::*;
+use crate::types::*;
+use crate::guild::*;
+use crate::user::*;
 use crate::serde::*;
-use derive_setters::*;
 use std::borrow::Cow;
 use std::fmt;
 
@@ -353,7 +351,7 @@ impl MessageNonce {
 	}
 }
 impl Serialize for MessageNonce {
-	fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		match &self.0 {
 			MessageNonceData::Snowflake(v) => v.serialize(serializer),
 			MessageNonceData::String(v) => v.serialize(serializer),
@@ -361,7 +359,7 @@ impl Serialize for MessageNonce {
 	}
 }
 impl <'de> Deserialize<'de> for MessageNonce {
-    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
         deserializer.deserialize_any(NonceVisitor)
     }
 }
@@ -371,7 +369,7 @@ impl <'de> Visitor<'de> for NonceVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("snowflake")
     }
-    fn visit_str<E>(self, v: &str) -> StdResult<MessageNonce, E> where E: DeError {
+    fn visit_str<E>(self, v: &str) -> Result<MessageNonce, E> where E: DeError {
 		Ok(v.into())
     }
     snowflake_visitor_common!(MessageNonce);

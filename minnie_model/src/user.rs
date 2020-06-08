@@ -1,8 +1,8 @@
 //! Types relating to Discord users.
 
-use crate::model::guild::*;
-use crate::model::types::*;
+use crate::guild::*;
 use crate::serde::*;
+use crate::types::*;
 use std::borrow::Cow;
 use std::fmt;
 use std::time::SystemTime;

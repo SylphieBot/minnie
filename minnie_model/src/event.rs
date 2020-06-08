@@ -1,13 +1,12 @@
 //! Types relating to Discord events.
 
 use chrono::{DateTime, Utc};
-use crate::errors::*;
-use crate::model::channel::*;
-use crate::model::guild::*;
-use crate::model::message::*;
-use crate::model::types::*;
-use crate::model::user::*;
+use crate::channel::*;
+use crate::guild::*;
+use crate::message::*;
 use crate::serde::*;
+use crate::types::*;
+use crate::user::*;
 use std::fmt::{Formatter, Result as FmtResult};
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -573,7 +572,7 @@ impl GatewayEventType {
 }
 
 impl Serialize for GatewayEventType {
-    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         if let GatewayEventType::Unknown(ev) = self {
             serializer.serialize_str(ev)
         } else {
@@ -583,7 +582,7 @@ impl Serialize for GatewayEventType {
 }
 
 impl <'de> Deserialize<'de> for GatewayEventType {
-    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
         deserializer.deserialize_str(EventTypeVisitor)
     }
 }
@@ -594,23 +593,23 @@ impl <'de> Visitor<'de> for EventTypeVisitor {
     fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str("enum GatewayEventType")
     }
-    fn visit_str<E>(self, v: &str) -> StdResult<Self::Value, E> where E: DeError {
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: DeError {
         Ok(match GatewayEventType::from_str(v) {
             Ok(v) => v,
             Err(_) => GatewayEventType::Unknown(v.to_string()),
         })
     }
-    fn visit_string<E>(self, v: String) -> StdResult<Self::Value, E> where E: DeError {
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> where E: DeError {
         Ok(match GatewayEventType::from_str(&v) {
             Ok(v) => v,
             Err(_) => GatewayEventType::Unknown(v),
         })
     }
-    fn visit_bytes<E>(self, v: &[u8]) -> StdResult<Self::Value, E> where E: DeError {
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: DeError {
         let s = ::std::str::from_utf8(v).map_err(|_| E::custom("byte string is not UTF-8"))?;
         self.visit_str(s)
     }
-    fn visit_byte_buf<E>(self, v: Vec<u8>) -> StdResult<Self::Value, E> where E: DeError {
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where E: DeError {
         let s = String::from_utf8(v).map_err(|_| E::custom("byte string is not UTF-8"))?;
         self.visit_string(s)
     }

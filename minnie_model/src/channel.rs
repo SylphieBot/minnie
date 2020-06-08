@@ -1,12 +1,10 @@
 //! Types related to Discord channels.
 
 use chrono::{DateTime, Utc};
-use crate::errors::*;
-use crate::model::types::*;
-use crate::model::guild::*;
-use crate::model::user::*;
+use crate::guild::*;
 use crate::serde::*;
-use derive_setters::*;
+use crate::types::*;
+use crate::user::*;
 use std::fmt;
 use std::time::Duration;
 
@@ -35,10 +33,10 @@ pub enum ChannelType {
     Unknown = i32::max_value(),
 }
 
-/// The type of id in a raw permission overwrite.
+/// The type of id in a permission overwrite.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum RawPermissionOverwriteType {
+pub enum PermissionOverwriteType {
     Role, Member,
 }
 
@@ -47,7 +45,7 @@ pub(crate) enum RawPermissionOverwriteType {
 struct RawPermissionOverwrite {
     id: Snowflake,
     #[serde(rename = "type")]
-    overwrite_type: RawPermissionOverwriteType,
+    overwrite_type: PermissionOverwriteType,
     allow: EnumSet<Permission>,
     deny: EnumSet<Permission>,
 }
@@ -67,10 +65,12 @@ impl PermissionOverwriteId {
             PermissionOverwriteId::Role(id) => id.0,
         }
     }
-    pub(crate) fn raw_type(self) -> RawPermissionOverwriteType {
+
+    /// Returns the type of overwrite.
+    pub fn overwrite_type(self) -> PermissionOverwriteType {
         match self {
-            PermissionOverwriteId::Member(_) => RawPermissionOverwriteType::Member,
-            PermissionOverwriteId::Role(_) => RawPermissionOverwriteType::Role,
+            PermissionOverwriteId::Member(_) => PermissionOverwriteType::Member,
+            PermissionOverwriteId::Role(_) => PermissionOverwriteType::Role,
         }
     }
 }
@@ -126,7 +126,7 @@ impl From<PermissionOverwrite> for RawPermissionOverwrite {
     fn from(over: PermissionOverwrite) -> RawPermissionOverwrite  {
         RawPermissionOverwrite {
             id: over.id.raw_id(),
-            overwrite_type: over.id.raw_type(),
+            overwrite_type: over.id.overwrite_type(),
             allow: over.allow,
             deny: over.deny,
         }
@@ -136,9 +136,9 @@ impl From<RawPermissionOverwrite> for PermissionOverwrite {
     fn from(over: RawPermissionOverwrite) -> PermissionOverwrite  {
         PermissionOverwrite {
             id: match over.overwrite_type {
-                RawPermissionOverwriteType::Member =>
+                PermissionOverwriteType::Member =>
                     PermissionOverwriteId::Member(UserId(over.id)),
-                RawPermissionOverwriteType::Role =>
+                PermissionOverwriteType::Role =>
                     PermissionOverwriteId::Role(RoleId(over.id)),
             },
             allow: over.allow,
@@ -148,12 +148,12 @@ impl From<RawPermissionOverwrite> for PermissionOverwrite {
 }
 
 impl Serialize for PermissionOverwrite {
-    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         RawPermissionOverwrite::serialize(&self.clone().into(), serializer)
     }
 }
 impl <'de> Deserialize<'de> for PermissionOverwrite {
-    fn deserialize<D>(deserializer: D) -> StdResult<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
         RawPermissionOverwrite::deserialize(deserializer).map(Into::into)
     }
 }

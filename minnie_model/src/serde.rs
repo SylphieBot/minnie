@@ -1,5 +1,6 @@
 //! A convenience prelude for all the serde stuff we're doing.
 
+pub use derive_setters::*;
 pub use enumset::*;
 pub use serde::de::{
     Deserializer, DeserializeSeed, DeserializeOwned, IntoDeserializer,

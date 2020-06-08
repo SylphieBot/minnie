@@ -20,6 +20,7 @@ nightly = []
 
 [dependencies]
 minnie_errors = { version = "0.1.0", path = "../minnie_errors" }
+minnie_model = { version = "0.1.0", path = "../minnie_model" }
 
 backtrace = "0.3.48"
 base64 = "0.12.0"

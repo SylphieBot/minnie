@@ -2,6 +2,7 @@
 members = [
     "minnie",
     "minnie_errors",
+    "minnie_model",
 ]
 
 [profile.release]

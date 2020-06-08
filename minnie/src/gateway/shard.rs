@@ -1,16 +1,15 @@
 //! Implements a single shard of a Discord gateway.
 
 use crate::context::DiscordContext;
-use crate::errors;
 use crate::gateway::{
     CompressionType, GatewayConfig, GatewayContext, GatewayError, GatewayHandler, GatewayResponse,
 };
-use crate::gateway::model::*;
-use crate::model::event::*;
-use crate::model::types::*;
 use crate::ws::*;
 use crate::ws::Response::*;
 use crossbeam_channel::{self, Receiver, Sender};
+use minnie_model::event::*;
+use minnie_model::gateway::*;
+use minnie_model::types::*;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -264,7 +263,7 @@ async fn running_shard(
                     } else {
                         session.set_sequence_id(seq);
                     }
-                    match errors::catch_panic(|| Ok(dispatch.on_event(gateway_ctx, data))) {
+                    match minnie_errors::catch_panic(|| Ok(dispatch.on_event(gateway_ctx, data))) {
                         Ok(Err(e)) => emit_err!(GatewayError::EventHandlingFailed(e), true),
                         Err(e) => emit_err!(GatewayError::EventHandlingPanicked(e), true),
                         _ => { }
@@ -432,7 +431,7 @@ pub fn start_shard(
                 ctx,
                 shard_id: shard.id,
             };
-            if let Err(e) = errors::catch_panic_async(async {
+            if let Err(e) = minnie_errors::catch_panic_async(async {
                 shard_main_loop(&gateway_ctx, &shard, &*dispatch).await;
                 shard.is_shutdown.store(true, Ordering::SeqCst);
                 Ok(())

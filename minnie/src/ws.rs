@@ -1,9 +1,9 @@
 use crate::context::DiscordContext;
-use crate::errors::*;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use flate2::{Decompress, FlushDecompress};
 use http::Request;
+use minnie_errors::*;
 use rand::seq::SliceRandom;
 use serde::*;
 use std::net::SocketAddr;

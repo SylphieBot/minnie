@@ -1,11 +1,11 @@
-use crate::errors::*;
 use crate::http::*;
-use crate::model::channel::*;
-use crate::model::message::*;
-use crate::model::types::*;
-use crate::model::user::*;
 use enumset::*;
 use futures::future::try_join_all;
+use minnie_errors::*;
+use minnie_model::channel::*;
+use minnie_model::message::*;
+use minnie_model::types::*;
+use minnie_model::user::*;
 use std::borrow::Cow;
 use std::fmt::{Display, Write};
 

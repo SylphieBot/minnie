@@ -1,10 +1,10 @@
 //! Basic types common to all API calls.
 
-use crate::errors::*;
 use crate::serde::*;
-use fnv::FnvHasher;
+use fxhash::FxHasher;
+use http::header::HeaderValue;
 use lazy_static::*;
-use reqwest::header::HeaderValue;
+use minnie_errors::*;
 use std::borrow::Cow;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -344,7 +344,7 @@ impl Snowflake {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
         let id = std::thread::current().id();
-        let mut hasher = FnvHasher::default();
+        let mut hasher = FxHasher::default();
         PROCESS_ID.hash(&mut hasher);
         id.hash(&mut hasher);
         let thread_hash = hasher.finish();

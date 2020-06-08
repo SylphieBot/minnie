@@ -1,11 +1,10 @@
 //! Types related to gateway connections.
 
-use crate::errors::*;
-use crate::model::event::*;
-use crate::model::types::*;
-use crate::model::user::*;
+use crate::event::*;
 use crate::serde::*;
-use derive_setters::*;
+use crate::types::*;
+use crate::user::*;
+pub use minnie_errors::*;
 use std::fmt;
 use std::marker::PhantomData;
 use std::time::{SystemTime, Duration};

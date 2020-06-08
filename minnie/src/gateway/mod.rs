@@ -1,12 +1,13 @@
 //! Handles receiving events from the Discord gateway.
 
 use crate::context::DiscordContext;
-use crate::errors::*;
-use crate::model::event::*;
-use crate::model::types::*;
 use derive_setters::*;
 use enumset::EnumSet;
 use fnv::FnvHashMap;
+use minnie_errors::*;
+use minnie_model::event::*;
+use minnie_model::gateway::*;
+use minnie_model::types::*;
 use parking_lot::{Mutex, RwLock};
 use rand::Rng;
 use std::error::{Error as StdError};
@@ -17,11 +18,7 @@ use tokio::time;
 use tokio::runtime::Handle;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 
-mod model;
 mod shard;
-
-use model::*;
-pub use model::{GuildMembersRequest, PresenceUpdate};
 
 // TODO: Implement rate limits.
 // TODO: Is there a way we can avoid the timeout check in ws.rs?

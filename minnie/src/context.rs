@@ -1,13 +1,14 @@
 //!
 
-use crate::errors::*;
-use crate::gateway::{GatewayController, GatewayConfig, PresenceUpdate};
+use crate::gateway::{GatewayController, GatewayConfig};
 use crate::http::{HttpConfig, RateLimits};
-use crate::model::types::{DiscordClientSecret, DiscordToken, Snowflake};
-use crate::serde::*;
 use derive_setters::*;
+use minnie_errors::*;
+use minnie_model::gateway::PresenceUpdate;
+use minnie_model::types::{DiscordClientSecret, DiscordToken, Snowflake};
 use reqwest::{Client, ClientBuilder};
 use reqwest::header::*;
+use serde::*;
 use std::borrow::Cow;
 use std::sync::Arc;
 use tokio_rustls::TlsConnector;

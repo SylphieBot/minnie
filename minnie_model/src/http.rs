@@ -1,19 +1,30 @@
-use crate::errors::*;
-use crate::model::channel::*;
-use crate::model::guild::*;
-use crate::model::message::*;
-use crate::model::types::*;
+use crate::channel::*;
+use crate::guild::*;
+use crate::message::*;
 use crate::serde::*;
-use derive_setters::*;
-use reqwest::multipart::Part;
+use crate::types::*;
+use minnie_errors::*;
 use std::borrow::Cow;
 use std::fmt;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::time::Duration;
 
+/// The packet send to indicate that a call has been rate limited.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+pub struct RateLimited {
+    /// The message of the rate limit.
+    pub message: String,
+    /// How long to retry after.
+    #[serde(with = "utils::duration_millis")]
+    pub retry_after: Duration,
+    /// Whether the rate limit hit was global.
+    pub global: bool,
+}
+
 /// Image formats supported by Discord.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[non_exhaustive]
 pub enum ImageFormat {
     /// A jpeg image.
     Jpeg,
@@ -142,21 +153,6 @@ impl <'a> ImageData<'a> {
     /// Returns the decoded data of this image.
     pub fn data(&self) -> Vec<u8> {
         base64::decode(self.base64_data()).expect("Invalid base64 data!")
-    }
-
-    pub(crate) fn check_is_image(&self) -> Result<()> {
-        match self.format {
-            ImageFormat::Png | ImageFormat::Jpeg => { }
-            _ => bail!(InvalidInput, "Image must be PNG or JPEG."),
-        }
-        Ok(())
-    }
-    pub(crate) fn check_is_anim_image(&self) -> Result<()> {
-        match self.format {
-            ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Gif => { }
-            _ => bail!(InvalidInput, "Image must be GIF, PNG or JPEG."),
-        }
-        Ok(())
     }
 }
 impl <'a> fmt::Display for ImageData<'a> {
@@ -400,11 +396,19 @@ impl <'a> CreateMessageFile<'a> {
         Ok(Self::new_with_mime(file_name, mime, contents))
     }
 
-    pub(crate) fn to_part(&self) -> Result<Part> {
-        Ok(Part::bytes(self.contents.clone().into_owned())
-            .mime_str(&*self.mime_type)
-            .expect("`Mime` contains invalid media type?")
-            .file_name(self.file_name.clone().into_owned()))
+    /// Returns the name of this file.
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    /// Returns the mime type of this file.
+    pub fn mime_type(&self) -> &str {
+        &self.mime_type
+    }
+
+    /// Returns the contents of this file.
+    pub fn contents(&self) -> &[u8] {
+        &self.contents
     }
 }
 

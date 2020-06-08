@@ -1,9 +1,9 @@
-use crate::errors::*;
 use crate::http::*;
-use crate::model::channel::*;
-use crate::model::guild::*;
-use crate::model::types::*;
 use futures::future::try_join_all;
+use minnie_errors::*;
+use minnie_model::channel::*;
+use minnie_model::guild::*;
+use minnie_model::types::*;
 use std::borrow::Cow;
 
 /// Performs operations relating to guilds.
@@ -167,6 +167,21 @@ impl <'a> MemberOps<'a> {
     routes_wrapper!(self, &mut self.raw);
 }
 
+fn check_is_image(image: &ImageData) -> Result<()> {
+    match image.format() {
+        ImageFormat::Png | ImageFormat::Jpeg => { }
+        _ => bail!(InvalidInput, "Image must be PNG or JPEG."),
+    }
+    Ok(())
+}
+fn check_is_anim_image(image: &ImageData) -> Result<()> {
+    match image.format() {
+        ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Gif => { }
+        _ => bail!(InvalidInput, "Image must be GIF, PNG or JPEG."),
+    }
+    Ok(())
+}
+
 fut_builder! {
     ('a, modify_guild_mod, GuildOps, self)
 
@@ -178,13 +193,13 @@ fut_builder! {
     }
     into_async!(|ops, data| -> Result<Guild> {
         if let Some(img) = &data.params.icon {
-            img.check_is_anim_image()?;
+            check_is_anim_image(&img)?;
         }
         if let Some(img) = &data.params.splash {
-            img.check_is_image()?;
+            check_is_image(&img)?;
         }
         if let Some(img) = &data.params.banner {
-            img.check_is_image()?;
+            check_is_image(&img)?;
         }
         ops.raw.modify_guild(ops.id, data.params).await
     });

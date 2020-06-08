@@ -1,12 +1,11 @@
-use crate::errors::*;
 use crate::http::{SENTINEL, HttpConfig};
-use crate::model::types::Snowflake;
-use crate::serde::*;
 use fnv::FnvHashMap;
+use minnie_errors::*;
+use minnie_model::http::RateLimited;
+use minnie_model::types::Snowflake;
 use parking_lot::Mutex;
 use std::cmp::{max, min};
 use std::fmt;
-use std::hash::Hash;
 use std::panic::{AssertUnwindSafe, resume_unwind};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -16,15 +15,6 @@ use reqwest::{Response, RequestBuilder};
 use reqwest::header::*;
 use tokio::time;
 use futures::FutureExt;
-
-/// A struct representing a rate limited API call.
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-struct RateLimited {
-    message: String,
-    #[serde(with = "utils::duration_millis")]
-    retry_after: Duration,
-    global: bool,
-}
 
 /// The estimated limits for a particular bucket, used to seed new rate limits.
 ///
