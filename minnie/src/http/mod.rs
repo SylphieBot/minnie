@@ -223,7 +223,7 @@ macro_rules! routes {
                         } else {
                             ErrorKind::IoError("Failed to receive API response.")
                         };
-                        Error::new_with_cause(kind, x.into())
+                        Error::new_with_cause(kind, x)
                     })?)?))
                 };
 

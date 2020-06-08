@@ -1,6 +1,12 @@
 #![deny(unused_must_use)]
+#![warn(missing_docs)]
 
 //! Defines the error type used by Minnie.
+//!
+//! While this crate is technically public API, it is only useful if you have a reason to need
+//! to create new Minnie errors. Normally, the API exposed in the `minnie` crate should be enough.
+
+// TODO: Gate backtraces behind a feature gate.
 
 use backtrace::Backtrace;
 use futures::FutureExt;
@@ -20,8 +26,23 @@ pub use status::{DiscordError, DiscordErrorCode};
 #[doc(inline)]
 pub use http::{StatusCode as HttpStatusCode};
 
+/// A wrapper around a [`std::error::Error`].
+///
+/// This is used to help ensure that all errors returned from `minnie` have a proper cause
+/// attached.
 #[derive(Debug)]
 pub struct LibError(Box<dyn StdError + Send + 'static>);
+impl LibError {
+    /// Borrows the wrapped error.
+    pub fn as_error(&self) -> &(dyn StdError + Send + 'static) {
+        &*self.0
+    }
+
+    /// Returns the wrapped error.
+    pub fn into_inner(self) -> Box<dyn StdError + Send + 'static> {
+        self.0
+    }
+}
 impl <T: StdError + Send + 'static> From<T> for LibError {
     #[inline(never)] #[cold]
     fn from(t: T) -> Self {
@@ -30,7 +51,7 @@ impl <T: StdError + Send + 'static> From<T> for LibError {
 }
 
 /// Represents the kind of error that occurred.
-#[derive(Error, Debug)]
+#[derive(Error, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[non_exhaustive]
 pub enum ErrorKind {
     /// Invalid input was provided to the library.
@@ -81,6 +102,7 @@ struct ErrorData {
 /// An error type used throughout the library.
 pub struct Error(Box<ErrorData>);
 impl Error {
+    /// Creates a new error with no backtrace or cause.
     #[inline(never)] #[cold]
     pub fn new(kind: ErrorKind) -> Self {
         Error(Box::new(ErrorData {
@@ -88,19 +110,28 @@ impl Error {
         }))
     }
 
+    /// Creates a new error with the given cause.
     #[inline(never)] #[cold]
-    pub fn new_with_cause(kind: ErrorKind, cause: LibError) -> Self {
-        let mut err = Error::new(kind);
-        err.0.cause = Some(cause);
-        err
+    pub fn new_with_cause(kind: ErrorKind, cause: impl Into<LibError>) -> Self {
+        Error::new(kind).with_cause(cause)
     }
 
+    /// Creates a new error with a backtrace.
     #[inline(never)] #[cold]
     pub fn new_with_backtrace(kind: ErrorKind) -> Self {
         Error::new(kind).with_backtrace()
     }
 
-    fn with_backtrace(mut self) -> Self {
+    /// Attaches a cause to this error.
+    #[inline(never)] #[cold]
+    pub fn with_cause(mut self, cause: impl Into<LibError>) -> Self {
+        self.0.cause = Some(cause.into());
+        self
+    }
+
+    /// Attaches a backtrace to this error.
+    #[inline(never)] #[cold]
+    pub fn with_backtrace(mut self) -> Self {
         if !self.backtrace().is_some() {
             self.0.backtrace = Some(Backtrace::new());
         }
@@ -157,7 +188,7 @@ impl Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self.0.cause.as_ref() {
-            Some(x) => Some(&*x.0),
+            Some(x) => Some(x.as_error()),
             None => None,
         }
     }
@@ -180,25 +211,32 @@ impl fmt::Display for Error {
 /// The result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;
 
+/// The result type used for [`LibError`]s.
 pub type LibResult<T> = StdResult<T, LibError>;
 
-// Helpers for error handling
+/// Helpers for converting [`LibError`]s into [`Error`]s
 pub trait ErrorExt<T>: Sized {
+    /// Converts this into an Minnie error given an error type.
     fn context(self, kind: ErrorKind) -> Result<T>;
 
+    /// Creates an IO error.
     fn io_err(self, text: &'static str) -> Result<T> {
         self.context(ErrorKind::IoError(text))
     }
+    /// Creates an error indicating a bad response from Discord.
     fn bad_response(self, text: &'static str) -> Result<T> {
         self.context(ErrorKind::DiscordBadResponse(text))
     }
+    /// Creates an error indicating an internal error.
     fn internal_err(self, text: &'static str) -> Result<T> {
         self.context(ErrorKind::InternalError(text))
     }
+    /// Creates an error indicating invalid input to a function.
     fn invalid_input(self, text: &'static str) -> Result<T> {
         self.context(ErrorKind::InvalidInput(text))
     }
 
+    /// Creates an unexpected error.
     fn unexpected(self) -> Result<T> {
         self.internal_err("Unexpected error encountered.")
     }
@@ -217,11 +255,14 @@ impl <T, E: Into<LibError>> ErrorExt<T> for StdResult<T, E> {
     fn context(self, kind: ErrorKind) -> Result<T> {
         match self {
             Ok(x) => Ok(x),
-            Err(e) => Err(Error::new_with_cause(kind, e.into())),
+            Err(e) => Err(Error::new_with_cause(kind, e.into()).with_backtrace()),
         }
     }
 }
 
+/// Catches panics and wraps them in an [`Error`].
+///
+/// This is exposed as an non-inherent method to avoid namespace pollution.
 pub fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
     match catch_unwind(AssertUnwindSafe(func)) {
         Ok(r) => r,
@@ -229,6 +270,9 @@ pub fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
     }
 }
 
+/// Catches panics in a future and wraps them in an [`Error`].
+///
+/// This is exposed as an non-inherent method to avoid namespace pollution.
 pub async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
     match AssertUnwindSafe(fut).catch_unwind().await {
         Ok(v) => v,
@@ -236,28 +280,39 @@ pub async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Resul
     }
 }
 
+/// A macro to help with creating [`ErrorKind`]s.
+///
+/// # Examples
+///
+/// ```rust
+/// # use minnie_errors::*;
+/// assert_eq!(error_kind!("Internal error."), ErrorKind::InternalError("Internal error."));
+/// assert_eq!(error_kind!(InvalidInput, "test"), ErrorKind::InvalidInput("test"));
+/// ```
 #[macro_export]
 macro_rules! error_kind {
     ($error:literal $(,)?) => {
-        crate::errors::ErrorKind::InternalError($error)
+        $crate::ErrorKind::InternalError($error)
     };
     ($variant:ident, $($body:expr),* $(,)?) => {
-        crate::errors::ErrorKind::$variant($($body,)*)
+        $crate::ErrorKind::$variant($($body,)*)
     };
 }
 
+/// Returns an error, using the same syntax as [`error_kind!`].
 #[macro_export]
 macro_rules! bail {
     ($($tt:tt)*) => {
-        return Err(crate::errors::Error::new_with_backtrace(error_kind!($($tt)*)))
+        return Err($crate::Error::new_with_backtrace($crate::error_kind!($($tt)*)))
     }
 }
 
+/// Checks a condition then returns an error, using the same syntax as [`error_kind!`].
 #[macro_export]
 macro_rules! ensure {
     ($check:expr, $($tt:tt)*) => {
         if !$check {
-            bail!($($tt)*);
+            $crate::bail!($($tt)*);
         }
     }
 }
