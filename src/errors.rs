@@ -2,42 +2,23 @@
 
 use backtrace::Backtrace;
 use crate::http::{DiscordError, HttpStatusCode};
-use flate2::DecompressError;
 use futures::FutureExt;
-use reqwest::{Error as ReqwestError};
-use reqwest::header::{InvalidHeaderValue, ToStrError as ReqwestToStrError};
-use serde_json::{Error as SerdeJsonError};
 use std::any::Any;
 use std::borrow::Cow;
-use std::convert::Infallible;
 use std::error::{Error as StdError};
 use std::fmt;
 use std::future::Future;
-use std::io::{Error as IoError};
-use std::num::{ParseIntError, ParseFloatError};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::str::ParseBoolError;
 use thiserror::*;
-use tokio_tungstenite::tungstenite::{Error as TungsteniteError};
-use webpki::InvalidDNSNameError;
 
 pub use std::result::{Result as StdResult};
 
-macro_rules! lib_error {
-    ($($ty:ident),* $(,)?) => {
-        #[derive(Error, Debug)]
-        pub enum LibError {$(
-            #[error("{0}")] $ty(#[from] #[source] $ty),
-        )*}
-    }
-}
-lib_error! {
-    DecompressError, InvalidDNSNameError, IoError, ParseBoolError, ParseIntError, ParseFloatError,
-    ReqwestError, InvalidHeaderValue, ReqwestToStrError, SerdeJsonError, TungsteniteError,
-}
-impl From<Infallible> for LibError {
-    fn from(_: Infallible) -> Self {
-        panic!("wtf")
+#[derive(Debug)]
+pub struct LibError(Box<dyn StdError + Send + 'static>);
+impl <T: StdError + Send + 'static> From<T> for LibError {
+    #[inline(never)] #[cold]
+    fn from(t: T) -> Self {
+        LibError(Box::new(t))
     }
 }
 
@@ -182,7 +163,10 @@ impl Error {
 }
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        self.0.cause.as_ref().and_then(|x| x.source())
+        match self.0.cause.as_ref() {
+            Some(x) => Some(&*x.0),
+            None => None,
+        }
     }
 }
 impl fmt::Debug for Error {
@@ -196,11 +180,6 @@ impl fmt::Debug for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.0.kind, f)?;
-        if let Some(x) = &self.0.cause {
-            f.write_str(" (caused by: ")?;
-            fmt::Display::fmt(x, f)?;
-            f.write_str(")")?;
-        }
         Ok(())
     }
 }
