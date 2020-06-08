@@ -13,7 +13,11 @@ fn get_exe_dir() -> PathBuf {
 }
 fn get_root_path() -> PathBuf {
     match env::var_os("CARGO_MANIFEST_DIR") {
-        Some(manifest_dir) => PathBuf::from(manifest_dir),
+        Some(manifest_dir) => {
+            let mut path = PathBuf::from(manifest_dir).canonicalize().unwrap();
+            path.pop();
+            path
+        },
         None => get_exe_dir(),
     }
 }
@@ -26,7 +30,7 @@ pub fn init_tracing() {
     tracing::subscriber::set_global_default(subscriber).unwrap();
 }
 pub fn new_context() -> DiscordContext {
-    let mut path = get_root_path().canonicalize().unwrap();
+    let mut path = get_root_path();
     path.push("discord_tok");
     if !path.exists() {
         panic!("Could not find Discord token at '{}'.", path.display());

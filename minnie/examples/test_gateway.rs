@@ -24,7 +24,9 @@ impl GatewayHandler for Dispatch {
 
 async fn async_main(ctx: DiscordContext) {
     ctx.gateway().connect(&Handle::current(), Dispatch).await.unwrap();
-    ctx.gateway().set_presence(PresenceUpdate::default().game(Activity::custom_status(None, "Hello, world!")));
+    ctx.gateway().set_presence(
+        PresenceUpdate::default().game(Activity::custom_status(None, "Hello, world!")),
+    );
     loop {
         tokio::time::delay_for(tokio::time::Duration::from_secs(100)).await;
     }
