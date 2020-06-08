@@ -1,5 +1,5 @@
 use crate::errors::*;
-use crate::http::{SENTINEL, DiscordError, DiscordErrorCode, HttpConfig};
+use crate::http::{SENTINEL, HttpConfig};
 use crate::model::types::Snowflake;
 use crate::serde::*;
 use fnv::FnvHashMap;
@@ -424,7 +424,7 @@ async fn check_response<'a>(
         let status = response.status();
         let discord_error = match response.json::<DiscordError>().await {
             Ok(v) => v,
-            Err(_) => DiscordError { code: DiscordErrorCode::NoStatusSent, message: None },
+            Err(_) => DiscordError::default(),
         };
         Err(Error::new_with_backtrace(ErrorKind::RequestFailed(call_name, status, discord_error)))
     }

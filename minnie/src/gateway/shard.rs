@@ -1,7 +1,7 @@
 //! Implements a single shard of a Discord gateway.
 
 use crate::context::DiscordContext;
-use crate::errors::*;
+use crate::errors;
 use crate::gateway::{
     CompressionType, GatewayConfig, GatewayContext, GatewayError, GatewayHandler, GatewayResponse,
 };
@@ -264,7 +264,7 @@ async fn running_shard(
                     } else {
                         session.set_sequence_id(seq);
                     }
-                    match Error::catch_panic(|| Ok(dispatch.on_event(gateway_ctx, data))) {
+                    match errors::catch_panic(|| Ok(dispatch.on_event(gateway_ctx, data))) {
                         Ok(Err(e)) => emit_err!(GatewayError::EventHandlingFailed(e), true),
                         Err(e) => emit_err!(GatewayError::EventHandlingPanicked(e), true),
                         _ => { }
@@ -432,7 +432,7 @@ pub fn start_shard(
                 ctx,
                 shard_id: shard.id,
             };
-            if let Err(e) = Error::catch_panic_async(async {
+            if let Err(e) = errors::catch_panic_async(async {
                 shard_main_loop(&gateway_ctx, &shard, &*dispatch).await;
                 shard.is_shutdown.store(true, Ordering::SeqCst);
                 Ok(())

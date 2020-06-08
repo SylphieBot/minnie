@@ -1,13 +1,12 @@
 #![cfg_attr(feature = "nightly", feature(type_alias_impl_trait))]
 #![deny(unused_must_use)]
-//#![warn(missing_docs)]
 
 // TODO: Consider adding APIs to allow creating Cow<'a, [T]> from iterators.
 
 #[macro_use] extern crate derivative;
 #[macro_use] extern crate tracing;
 
-#[macro_use] mod errors;
+#[macro_use] pub extern crate minnie_errors as errors;
 #[macro_use] mod serde;
 #[macro_use] pub mod http;
 

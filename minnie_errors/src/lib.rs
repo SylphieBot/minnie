@@ -1,7 +1,8 @@
-//! Defines the error types used by Minnie.
+#![deny(unused_must_use)]
+
+//! Defines the error type used by Minnie.
 
 use backtrace::Backtrace;
-use crate::http::{DiscordError, HttpStatusCode};
 use futures::FutureExt;
 use std::any::Any;
 use std::borrow::Cow;
@@ -12,6 +13,12 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use thiserror::*;
 
 pub use std::result::{Result as StdResult};
+
+mod status;
+pub use status::{DiscordError, DiscordErrorCode};
+
+#[doc(inline)]
+pub use http::{StatusCode as HttpStatusCode};
 
 #[derive(Debug)]
 pub struct LibError(Box<dyn StdError + Send + 'static>);
@@ -75,21 +82,21 @@ struct ErrorData {
 pub struct Error(Box<ErrorData>);
 impl Error {
     #[inline(never)] #[cold]
-    fn new(kind: ErrorKind) -> Self {
+    pub fn new(kind: ErrorKind) -> Self {
         Error(Box::new(ErrorData {
             kind, backtrace: None, cause: None,
         }))
     }
 
     #[inline(never)] #[cold]
-    pub(crate) fn new_with_cause(kind: ErrorKind, cause: LibError) -> Self {
+    pub fn new_with_cause(kind: ErrorKind, cause: LibError) -> Self {
         let mut err = Error::new(kind);
         err.0.cause = Some(cause);
         err
     }
 
     #[inline(never)] #[cold]
-    pub(crate) fn new_with_backtrace(kind: ErrorKind) -> Self {
+    pub fn new_with_backtrace(kind: ErrorKind) -> Self {
         Error::new(kind).with_backtrace()
     }
 
@@ -110,20 +117,6 @@ impl Error {
             "<non-string panic info>".into()
         };
         Error::new(ErrorKind::Panicked(panic))
-    }
-
-    pub(crate) fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
-        match catch_unwind(AssertUnwindSafe(func)) {
-            Ok(r) => r,
-            Err(e) => Err(Error::wrap_panic(e)),
-        }
-    }
-
-    pub(crate) async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
-        match AssertUnwindSafe(fut).catch_unwind().await {
-            Ok(v) => v,
-            Err(panic) => Err(Error::wrap_panic(panic)),
-        }
     }
 
     /// Returns the type of error contained in this object.
@@ -229,6 +222,21 @@ impl <T, E: Into<LibError>> ErrorExt<T> for StdResult<T, E> {
     }
 }
 
+pub fn catch_panic<T>(func: impl FnOnce() -> Result<T>) -> Result<T> {
+    match catch_unwind(AssertUnwindSafe(func)) {
+        Ok(r) => r,
+        Err(e) => Err(Error::wrap_panic(e)),
+    }
+}
+
+pub async fn catch_panic_async<T>(fut: impl Future<Output = Result<T>>) -> Result<T> {
+    match AssertUnwindSafe(fut).catch_unwind().await {
+        Ok(v) => v,
+        Err(panic) => Err(Error::wrap_panic(panic)),
+    }
+}
+
+#[macro_export]
 macro_rules! error_kind {
     ($error:literal $(,)?) => {
         crate::errors::ErrorKind::InternalError($error)
@@ -237,11 +245,15 @@ macro_rules! error_kind {
         crate::errors::ErrorKind::$variant($($body,)*)
     };
 }
+
+#[macro_export]
 macro_rules! bail {
     ($($tt:tt)*) => {
         return Err(crate::errors::Error::new_with_backtrace(error_kind!($($tt)*)))
     }
 }
+
+#[macro_export]
 macro_rules! ensure {
     ($check:expr, $($tt:tt)*) => {
         if !$check {

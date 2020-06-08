@@ -1,4 +1,35 @@
-use crate::serde::*;
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use std::fmt;
+
+/// The error code returned when an API call fails.
+#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Default)]
+#[non_exhaustive]
+pub struct DiscordError {
+    /// The error code returned by Discord.
+    ///
+    /// May be [`NoStatusSent`](`DiscordErrorCode::NoStatusSent`) in the case that no status
+    /// code was received, or it could not be parsed.
+    pub code: DiscordErrorCode,
+    /// The message string returned by Discord.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+impl fmt::Display for DiscordError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.code == DiscordErrorCode::NoStatusSent {
+            f.write_str("no error information available")
+        } else {
+            fmt::Display::fmt(&self.code.as_i32(), f)?;
+            f.write_str(" - ")?;
+            if let Some(msg) = &self.message {
+                f.write_str(msg)
+            } else {
+                f.write_str(self.code.message().unwrap_or("unknown error code"))
+            }
+        }
+    }
+}
+
 
 macro_rules! status_codes {
     ($($status:literal $variant:ident => $status_str:literal),* $(,)?) => {
@@ -54,6 +85,11 @@ impl <'de> Deserialize<'de> for DiscordErrorCode {
 impl Serialize for DiscordErrorCode {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         serializer.serialize_i32(self.as_i32())
+    }
+}
+impl Default for DiscordErrorCode {
+    fn default() -> Self {
+        DiscordErrorCode::NoStatusSent
     }
 }
 

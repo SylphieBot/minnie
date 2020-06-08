@@ -1,5 +1,4 @@
 use crate::errors::*;
-use crate::http::status::DiscordErrorCode;
 use crate::model::channel::*;
 use crate::model::guild::*;
 use crate::model::message::*;
@@ -12,35 +11,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::time::Duration;
-
-/// The error code returned when an API call fails.
-#[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[non_exhaustive]
-pub struct DiscordError {
-    /// The error code returned by Discord.
-    ///
-    /// May be [`NoStatusSent`](`DiscordErrorCode::NoStatusSent`) in the case that no status
-    /// code was received, or it could not be parsed.
-    pub code: DiscordErrorCode,
-    /// The message string returned by Discord.
-    pub message: Option<String>,
-}
-impl fmt::Display for DiscordError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.code == DiscordErrorCode::NoStatusSent {
-            f.write_str("no error information available")
-        } else {
-            fmt::Display::fmt(&self.code.as_i32(), f)?;
-            f.write_str(" - ")?;
-            if let Some(msg) = &self.message {
-                f.write_str(msg)
-            } else {
-                f.write_str(self.code.message().unwrap_or("unknown error code"))
-            }
-        }
-    }
-}
 
 /// Image formats supported by Discord.
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]

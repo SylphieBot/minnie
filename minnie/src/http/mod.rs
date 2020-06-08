@@ -10,6 +10,7 @@ use crate::model::user::*;
 use crate::serde::*;
 use derive_setters::*;
 use parking_lot::Mutex;
+use reqwest::header::HeaderValue;
 use reqwest::multipart::Form;
 use serde_json;
 use std::error::{Error as StdError};
@@ -19,15 +20,9 @@ use tracing_futures::*;
 
 mod limits;
 mod model;
-mod status;
 
 use self::limits::{GlobalLimit, RateLimitRoute, RateLimitStore};
 pub use self::model::*;
-
-#[doc(inline)]
-pub use reqwest::{StatusCode as HttpStatusCode};
-pub use self::status::DiscordErrorCode;
-use reqwest::header::HeaderValue;
 
 const SENTINEL: Snowflake = Snowflake(0);
 

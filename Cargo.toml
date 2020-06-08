@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "minnie",
+    "minnie_errors",
 ]
 
 [profile.release]

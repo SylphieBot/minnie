@@ -1,0 +1,21 @@
+[package]
+name = "minnie_errors"
+version = "0.1.0"
+authors = ["Alissa Rao <lymia@lymiahugs.com>"]
+edition = "2018"
+
+description = "Defines the error type used by `minnie`. This is reexposed in `minnie`."
+
+documentation = "https://docs.rs/minnie_errors/"
+repository = "https://github.com/SylphieBot/minnie"
+include = ["../LICENSE-MIT", "../LICENSE-APACHE"]
+
+license = "MIT/Apache-2.0"
+
+[dependencies]
+backtrace = "0.3.48"
+futures = "0.3.0"
+http = "0.2.0"
+parking_lot = "0.10.0"
+serde = { version = "1.0.90", features = ["rc", "derive", "unstable"] }
+thiserror = "1.0.19"
