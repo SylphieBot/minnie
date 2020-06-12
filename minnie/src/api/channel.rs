@@ -401,11 +401,6 @@ fut_builder! {
         write!(self.params.content.as_mut().unwrap().to_mut(), "{}", content).unwrap();
     }
 
-    /// Appends content to this post, sanitizing unwanted user input.
-    pub fn append_user(&mut self, content: impl ToString) {
-        self.append(crate::utils::sanitize_user_input(&content.to_string()));
-    }
-
     /// Sets the nonce for this post.
     ///
     /// The nonce will be present in the event the messages triggers in the gateway, and can be
