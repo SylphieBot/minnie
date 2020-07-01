@@ -23,7 +23,7 @@ pub struct PresenceUpdate {
     pub status: UserStatus,
     /// The activity the bot is currently engaged in.
     ///
-    /// If you need to specify multiple activities, use the `activity` field instead.
+    /// If you need to specify multiple activities, use the `activities` field instead.
     pub game: Option<Activity>,
     /// A list of activities the bot is currently engaged in.
     #[setters(into)]

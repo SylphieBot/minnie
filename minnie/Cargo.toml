@@ -27,7 +27,7 @@ derivative = "2.0.2"
 derive_setters = "0.1.0"
 enumset = { version = "1.0.0", features = ["serde"] }
 fxhash = "0.2.1"
-parking_lot = "0.10.0"
+parking_lot = "0.11.0"
 rand = "0.7.2"
 tracing = { version = "0.1.10", features = ["log"] }
 tracing-futures = "0.2.0"
@@ -48,7 +48,7 @@ http = "0.2.0"
 tokio-rustls = "0.13"
 tokio-tungstenite = "0.10.1"
 webpki = "0.21"
-webpki-roots = "0.19"
+webpki-roots = "0.20"
 
 [dev-dependencies]
 log = "0.4.8"

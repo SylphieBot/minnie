@@ -16,6 +16,6 @@ license = "MIT/Apache-2.0"
 backtrace = "0.3.48"
 futures = "0.3.0"
 http = "0.2.0"
-parking_lot = "0.10.0"
+parking_lot = "0.11.0"
 serde = { version = "1.0.90", features = ["rc", "derive", "unstable"] }
 thiserror = "1.0.19"
