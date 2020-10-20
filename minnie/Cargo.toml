@@ -45,8 +45,8 @@ url = "2.1.1"
 # Websocket
 flate2 = { version = "1.0.7", default-features = false, features = ["rust_backend"] }
 http = "0.2.0"
-tokio-rustls = "0.13"
-tokio-tungstenite = "0.10.1"
+tokio-rustls = "0.14.1"
+tokio-tungstenite = "0.11.0"
 webpki = "0.21"
 webpki-roots = "0.20"
 

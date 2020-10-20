@@ -527,7 +527,7 @@ pub enum GatewayEventType {
     VoiceStateUpdate,
     VoiceServerUpdate,
     WebhooksUpdate,
-    #[strum(disabled="true")]
+    #[strum(disabled)]
     Unknown(String),
 }
 impl GatewayEventType {
