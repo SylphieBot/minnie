@@ -108,7 +108,7 @@ impl <'a> MemberOps<'a> {
     /// Modifies the user's permissions, nickname and related settings.
     ///
     /// For information on what properties can be set, see the methods of [`ModifyGuildMemberFut`].
-    pub async fn modify(self) -> ModifyGuildMemberFut<'a> {
+    pub fn modify(self) -> ModifyGuildMemberFut<'a> {
         ModifyGuildMemberFut::new(self)
     }
 

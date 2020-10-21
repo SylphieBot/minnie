@@ -196,7 +196,7 @@ impl <'a> MessageOps<'a> {
     ///
     /// By default, this returns the first 25 users in the list. For more information on other
     /// options for this API call, see the methods of [`EmojiReactionsFut`].
-    pub async fn emoji_reactions(self, emoji: &'a EmojiRef) -> EmojiReactionsFut<'a> {
+    pub fn emoji_reactions(self, emoji: &'a EmojiRef) -> EmojiReactionsFut<'a> {
         EmojiReactionsFut::new(self, emoji)
     }
 
